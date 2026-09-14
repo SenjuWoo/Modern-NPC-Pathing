@@ -1,113 +1,72 @@
-# NPC Pathing NG v2.5.0
+<p align="center">
+  <img src="docs/images/logo.svg" width="72" height="72" alt="NPC Pathing NG mark">
+</p>
 
-Runtime navmesh failsafe for Skyrim SE/AE humanoid NPCs, with **optional** SkyParkour vault/climb, EVG Animated Traversal marker routes, and follower parkour replay. Stuck NPCs can step around geometry, open simple doors, vault or climb when SkyParkour is installed, route across EVG markers when EVG is installed, and only then fall back to a short validated sidestep teleport.
+<h1 align="center">NPC Pathing NG</h1>
 
-## What this mod actually does
+<p align="center"><strong>Unstick humanoid NPCs. Parkour is optional.</strong></p>
 
-- Detects NPCs that are **trying to walk** but not moving (idle, sandboxing, sitting, swimming, mounted, etc. are ignored).
-- Tries animated **SkyParkour** vault/climb when that integration is installed and enabled.
-- Lets **followers** replay *your* recent SkyParkour moves (teammate flag - works with NFF, vanilla followers, and similar frameworks).
-- Handles **doorways** without shoving NPCs sideways out of the only route.
-- Uses a **validated last-resort teleport** only after repeated stuck cycles against real static geometry - not against the player body, other actors, or dialogue holds.
-- Ships with an **MCM** (MCM Helper) and an **INI** fallback.
+<p align="center">
+  SKSE plugin for Skyrim SE/AE. Motion-gated navmesh failsafe, optional SkyParkour<br>
+  vault/climb, EVG marker routes, and a validated last-resort teleport.
+</p>
 
-## What this mod does **not** claim
+<p align="center">
+  <a href="https://github.com/ShugokiFable/Modern-NPC-Pathing/actions/workflows/build.yml"><img src="https://github.com/ShugokiFable/Modern-NPC-Pathing/actions/workflows/build.yml/badge.svg" alt="Build"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-7ee0ff?labelColor=0d0f11" alt="GPL-3.0"></a>
+  <a href="https://github.com/ShugokiFable/Modern-NPC-Pathing/releases/tag/v2.5.0"><img src="https://img.shields.io/badge/release-v2.5.0-7ee0ff?labelColor=0d0f11" alt="v2.5.0"></a>
+  <img src="https://img.shields.io/badge/SKSE-SE%20%2F%20AE-8f9aa6?labelColor=0d0f11" alt="SKSE SE/AE">
+</p>
 
-- **EVG Animated Traversal is optional, but it *is* a working NPC feature since 2.5.0** — as *routes*, not furniture.
-  - Plugin master list is only `Skyrim.esm`. EVG (and SkyParkour) are runtime lookups.
-  - NPCs can never *enter* EVG furniture: activation is rejected by the engine (furniture entry for NPCs is package-driven; confirmed from SKSE and Papyrus during 2.4.3-2.4.4). So 2.5.0 treats each marker as a **route**: a stuck NPC approaching a marker from its entry side first tries a SkyParkour move along the marker's heading, then a collision-validated hop across to a landing derived from the marker's bounds and kind (ladder/ledge = up, drop/roll = down, squeeze/vault = across).
-  - Default: `bEnableEVGTraversal=1`. With EVG absent, the route layer is inert (no markers resolve) and costs at most a bounded scan in stuck NPCs' cells.
-  - Your own player-side EVG use is unaffected.
-- **Not a full AI overhaul.** It unstucks and optionally parkours; it does not rewrite pathfinding or combat AI.
-- **Default climb height is 130 units** (steps, vaults, low/chest ledges) - not full mountain climbing. Raise toward 250 in MCM/INI if you want higher climbs.
+<p align="center">
+  <a href="#install">Install</a>
+  ·
+  <a href="#build">Build</a>
+  ·
+  <a href="#honest-status">Honest status</a>
+  ·
+  <a href="CHANGELOG.md">Changelog</a>
+  ·
+  <a href="https://www.nexusmods.com/skyrimspecialedition/mods/185413">Nexus</a>
+</p>
+
+## Why it exists
+
+Skyrim NPCs freeze against geometry, doorframes, and short ledges that the navmesh does not cover. This plugin watches for **walk intent with no progress**, then tries animated escapes before a short, checked teleport.
+
+It is not a pathfinding rewrite and not a combat-AI overhaul.
+
+## What you get
+
+- Stuck detection that ignores idle, sandboxing, sitting, swimming, and mounted NPCs
+- Optional **SkyParkour** vault/climb when that mod is installed and enabled
+- **Follower replay** of your recent SkyParkour moves (teammate flag: vanilla followers, NFF, similar frameworks)
+- Doorway handling that does not shove NPCs sideways off the only route
+- **EVG Animated Traversal markers as routes** (optional; on by default since 2.5.0) — never furniture activation
+- Validated last-resort teleport after repeated stuck cycles against static geometry — not the player body, other actors, or dialogue holds
+- MCM via MCM Helper, with `Data/SKSE/Plugins/NPCPathingNG.ini` as fallback
+- FOMOD that auto-detects SkyParkour / EVG and picks a matching INI profile
+
+## What this mod does not claim
+
+- **Not a full AI overhaul.** It unstucks and optionally parkours.
+- **Default climb height is 130 units** (steps, vaults, low/chest ledges). Raise toward 250 in MCM/INI for higher climbs.
 - **Indoor parkour is off by default.** Teleport fallback can still clear stuck NPCs indoors.
-- **2.4.8 was the first genuine native rebuild since 2.4.4.** Versions 2.4.5, 2.4.6 and 2.4.7 all shipped the
-  identical 2.4.4 DLL (SHA256 `9e5616e0...`), so any behaviour difference reported between those three
-  releases was not native code. The 2.4.8 DLL embeds version `2.4.8`.
+- **SkyParkour climb SFX are 2D** (`SOMStereo`). Parkour only fires within **1600** units of the player (`fParkourMaxPlayerDistance`; `0` = unlimited).
+- **EVG is optional.** Plugin masters are only `Skyrim.esm`. EVG and SkyParkour are runtime lookups. NPCs never enter EVG furniture (`ActivateRef` / Papyrus `Activate` are engine-rejected for NPCs). With EVG absent, the route layer is inert.
+- **2.4.8 was the first genuine native rebuild since 2.4.4.** 2.4.5, 2.4.6, and 2.4.7 shipped the identical 2.4.4 DLL (SHA256 `9e5616e0...`). Do not use 2.4.5.
 
-## What changed in 2.5.0
+## How stuck NPCs are handled
 
-EVG Animated Traversal markers are now **routes**, and the feature is on by default.
+```text
+walk intent + no progress
+    → SkyParkour vault/climb (if installed, in range, geometry matches)
+    → EVG marker route (if EVG present): parkour along heading, else bounds hop
+    → doorway / sidestep
+    → validated teleport (last resort, after iTeleportEscalation stuck cycles)
+```
 
-- **Never activates EVG furniture for NPCs** (`ActivateRef`/`Papyrus.Activate` are engine-rejected for NPCs — that path is gone entirely, including the old self-disable latch that existed because of it).
-- **Marker-guided parkour:** a stuck NPC near a marker parkours along the marker's heading when the geometry matches. The 2.4.10 player-distance cap still applies, so no distant 2D climb SFX.
-- **Bounds-based landing hop:** when the geometry does not match a parkour move (ladders, squeezes, drops), the NPC is hopped across to a landing derived from the marker's kind (Up/Down/Across) and furniture bounds — ground-snapped, headroom- and capsule-cleared, never into water, never through actors, and never while in combat near the player. It fires only after the animated routes have had a chance (second stuck trigger onward).
-- **Follower replay** routes followers across the same markers after you use them.
-- **Scan latch re-arms on cell change** — a markerless city no longer disables marker use for the whole session, and a markerless area no longer re-scans the cell grid forever.
-- **Default turned on** (`bEnableEVGTraversal=1`; MCM "NPCs Use EVG Markers", FOMOD presets rebuilt: SkyParkour + EVG / SkyParkour only / Navmesh failsafe). No new settings otherwise — the ESP globals, record layout and FormIDs are unchanged, so no save cleaning.
-
-## What changed in 2.4.10
-
-Phantom SkyParkour climb sounds. SkyParkour's climb SFX are 2D (`SOMStereo`) —
-they play at your ears with no distance fade. 2.4.9 (and earlier) fired parkour
-on any stuck humanoid in high process, so you heard a climb next to you with
-nobody visible, including while camping "alone" with a hunter or traveler still
-in the loaded grid. Parkour now requires the NPC to be within **1600** units of
-you (MCM/INI `fParkourMaxPlayerDistance`; **0** restores the old unlimited
-range). Animals were already excluded; they were never the source.
-
-## What changed in 2.4.9
-
-Performance release, aimed squarely at frame drops in crowded cities. No behaviour
-change and nothing to reconfigure.
-
-- **Crowd jams no longer run the parkour ledge sweep.** One NPC wedged behind another
-  is the most common stuck cause in a city, and the ~15-iteration sweep could never
-  succeed there (actors are rejected as landing surfaces). Two rays classify the
-  blocker first and bail.
-- **EVG marker scan no longer walks the whole cell grid.** 250-unit radius, but it was
-  calling `ForEachReferenceInRange` on all 25 attached cells; out-of-range cells are
-  now skipped.
-- **EVG self-disable latch now trips on fruitless scans**, not just rejected
-  activations - previously it could never trip anywhere without markers, i.e. every
-  city, so the scan repeated all session.
-- **Follower-faction lookup cached** instead of a global form-table lookup per actor
-  per check.
-
-The EVG items only affected `bEnableEVGTraversal=1` setups. Back then that option
-remained off by default and could not work for NPCs; 2.5.0 replaces the activation
-approach with marker routes entirely (see above).
-
-## What changed in 2.4.8
-
-- **Fixed:** NPCs vaulted onto barrels, urns and crates and were left stranded on top of them.
-  The landing-surface filter only rejected NPCs, doors and activators; `Container`,
-  `MovableStatic`, `Flora` and `Tree` are now rejected too.
-- **Fixed:** INI edits and the FOMOD preset were silently ignored whenever the ESP was active,
-  because settings were copied out of the plugin's globals every frame. The INI now *seeds*
-  the MCM at `kDataLoaded` (which runs before a save loads), so a new game or fresh install
-  starts from your INI/FOMOD preset, while loading an existing save still restores that
-  save's own MCM values. MCM changes still apply instantly.
-- **Changed:** `iTeleportEscalation` default raised 3 -> 5; teleports were firing more often
-  than the animated traversal they exist to back up.
-- **Note:** the `NPCPathingNG.esp` header author field changed, so the plugin hash differs from
-  2.4.4-2.4.7. Only the TES4 header changed - no record, FormID or master - so **no save
-  cleaning is needed**.
-
-## Features (accurate)
-
-**Follower parkour (optional, needs SkyParkour)**  
-When you vault or climb with SkyParkour, the mod can record the spot. A follower who reaches that area while you are above them may perform the same move instead of pathing around or warping. Detected via the teammate flag.
-
-**Combat pursuit (default on)**  
-NPCs in combat are processed by default so guards/foes can climb after you on short ledges. One MCM toggle turns that off if your load order misbehaves.
-
-**Climbing stays grounded by default**  
-Max climb **130** units by default. Indoors parkour off by default. SkyParkour
-animations only fire within **1600** units of the player (their climb SFX are 2D).
-
-**Teleport is last resort**  
-Only after parkour/other escapes fail against static geometry, with corridor and destination checks. Can be disabled entirely.
-
-**Stuck detection is motion-gated**  
-Requires walk intent + no progress. Idle NPCs are not "fixed."
-
-**MCM via MCM Helper (optional)**  
-Pages: General, Parkour, Followers & Combat. Globals apply mid-game. Without MCM Helper, edit `Data/SKSE/Plugins/NPCPathingNG.ini` (re-read when you close the journal).
-
-**FOMOD installer**  
-Auto-detects SkyParkour / EVG presence and pre-selects a matching INI profile:
-SkyParkour + EVG (recommended), SkyParkour only, or Navmesh failsafe only.
+EVG landings are ground-snapped, headroom- and capsule-cleared, never into water, never through actors, and refused in combat near the player. The hop waits until animated routes have had a chance (second stuck trigger onward).
 
 ## Requirements
 
@@ -119,69 +78,98 @@ SkyParkour + EVG (recommended), SkyParkour only, or Navmesh failsafe only.
 
 **Optional**
 
-- [SkyParkour V3](https://www.nexusmods.com/skyrimspecialedition/mods/132292) + its Nemesis/Pandora (or equivalent) behavior patch - for vault/climb and follower replay
-- SkyUI + MCM Helper - for the in-game menu (INI works without them)
+- [SkyParkour V3](https://www.nexusmods.com/skyrimspecialedition/mods/132292) plus its Nemesis/Pandora (or equivalent) behavior patch — vault/climb and follower replay
+- SkyUI + MCM Helper — in-game menu (INI works without them)
+- EVG Animated Traversal — marker routes when present; nothing changes when absent
 
-**Not required**
+`NPCPathingNG.esp` is ESL-flagged. No full load-order slot.
 
-- EVG Animated Traversal — optional. When installed, its markers are used as NPC routes (on by default); without it nothing changes.
+## Install
 
-`NPCPathingNG.esp` is ESL-flagged (no full load-order slot).
+Install the FOMOD from [Releases](https://github.com/ShugokiFable/Modern-NPC-Pathing/releases) or [Nexus](https://www.nexusmods.com/skyrimspecialedition/mods/185413) with Mod Organizer 2 or Vortex.
 
-## Configuration
+1. Let the installer detect SkyParkour / EVG.
+2. Keep the matching profile unless you want navmesh-failsafe only: **SkyParkour + EVG**, **SkyParkour only**, or **Navmesh failsafe**.
+3. Launch through SKSE.
 
-- MCM: **NPC Pathing NG**
-- INI: `Data/SKSE/Plugins/NPCPathingNG.ini`
-- Defaults: followers included, combat included, indoor parkour off, climb height **130**, parkour max distance **1600**, EVG marker routes **on**
+If you already loaded **2.4.5**: install 2.4.8 or later and remove leftover `Data/Scripts/NPNG_MCMBridge.pex` if present. An empty orphan menu may remain on that save until cleaned or a new game is started.
 
-## Recent versions
+No save cleaning is required for 2.4.8 → 2.5.0. ESP globals, record layout, and FormIDs are unchanged since 2.4.6. Existing saves keep their saved MCM values; the EVG-on default only seeds fresh installs / new games.
 
-### 2.5.0 (2026-08-16) - current
+### Configuration
 
-- EVG markers as routes (on by default): marker-guided SkyParkour, then a bounds-validated landing hop; no more furniture activation for NPCs. FOMOD presets rebuilt.
+| | |
+| --- | --- |
+| MCM | **NPC Pathing NG** (pages: General, Parkour, Followers & Combat) |
+| INI | `Data/SKSE/Plugins/NPCPathingNG.ini` (re-read when you close the journal) |
+| Log | `Documents/My Games/Skyrim Special Edition/SKSE/NPCPathingNG.log` |
 
-### 2.4.10 (2026-08-16)
+Defaults: followers included, combat included, indoor parkour off, climb height **130**, parkour max distance **1600**, EVG marker routes **on**, teleport escalation **5**.
 
-- Phantom SkyParkour climb sounds: SkyParkour SFX are 2D (`SOMStereo`). Parkour now requires the NPC to be within **1600** units of the player (`fParkourMaxPlayerDistance`; 0 = unlimited).
+The INI seeds the MCM at `kDataLoaded` (before a save loads). Loading an existing save restores that save's MCM values. MCM changes still apply instantly.
 
-### 2.4.9
+## Build
 
-- City performance: crowd-jam early-out, EVG cell skip, fruitless-scan latch, cached follower faction.
+Windows x64. Visual Studio 2022 or newer with Desktop C++ tools, CMake 3.21+, Python 3.10+, vcpkg (`VCPKG_ROOT` or `VCPKG_INSTALLATION_ROOT`), and CommonLibSSE-NG commit `b93280e832f263dbef44e44cbe2936622a02f91a`. Full recipe: [`BUILDING.md`](BUILDING.md).
 
-### 2.4.8
+```powershell
+./build_release.ps1
+```
 
-- First genuine native rebuild since 2.4.4. No more vaults onto barrels/crates. INI/FOMOD preset actually seeds the MCM.
+The script pins CommonLibSSE-NG, builds it and the plugin with the static MSVC runtime, runs validation, and writes the Nexus archive to `dist/`. The compiled DLL lands at `package/Data/SKSE/Plugins/NPCPathingNG.dll`. This tree does not ship a DLL.
 
-If you already loaded 2.4.5: install 2.4.8 or later, remove leftover `Data/Scripts/NPNG_MCMBridge.pex` if present. An empty orphan menu may remain on that save until cleaned or a new game is started.
+After CommonLibSSE-NG is installed:
 
-### 2.4.5 - yanked
+```powershell
+cmake --preset windows-msvc
+cmake --build --preset windows-msvc-release
+python generate_esp.py
+python -m unittest discover -s tests -v
+```
 
-Do not use. Dual MCM registration on saves that already had the stock menu.
+Do not distribute `build/`, `extern/`, vcpkg packages, object files, PDBs, nested `.git` directories, or old ZIP files.
 
-### 2.4.4
+## Project map
 
-- EVG off by default; documented as non-working for NPCs and not required.
-- FOMOD with dependency auto-detection.
+```text
+src/                 SKSE plugin (pathing, parkour, EVG routes, settings)
+tests/               packaging / ESP / version unittest (not in-game)
+package/             staged Data tree (ESP, INI, SEQ)
+fomod_src/           FOMOD installer sources
+patches/             StepUpOnto SKSE compatibility patch sources
+tools/               release / FOMOD packagers
+generate_esp.py      ESL-flagged ESP generator
+build_release.ps1    one-command CommonLibSSE-NG + plugin + archive
+```
 
-### 2.4.3-2.4.1
+## Honest status
 
-- Doorway sidestep fix; EVG failures fail loudly; posture/tilt fix after vaults; follower replay tuning; parkour disable cleanup; packaging/CI hardening. See `CHANGELOG.md`.
+Verified in this tree:
 
-## Logs
+- Version **2.5.0** (`VERSION.txt`, `src/version.h`, CMake `project(...)`)
+- Python release tests (`tests/test_release.py`)
+- GitHub Actions build that compiles the DLL against pinned CommonLibSSE-NG
+- EVG furniture-activation path removed; markers used as routes only
 
-`Documents/My Games/Skyrim Special Edition/SKSE/NPCPathingNG.log`  
-Enable Debug Logging in the MCM to see detailed events.
+Not claimed:
 
-## Source / license
+- A rewrite of Bethesda pathfinding or combat AI
+- Mountain climbing at the default 130-unit cap
+- In-game screenshots or a complete load-order compatibility matrix
+- That 2.4.5–2.4.7 contained native behaviour changes (they did not)
 
-- Source: https://github.com/ShugokiFable/Modern-NPC-Pathing  
-- License: GPLv3 (see `LICENSE`)  
-- Nexus: https://www.nexusmods.com/skyrimspecialedition/mods/185413
+## Related: StepUpOnto SKSE
 
-## Related: StepUpOnto SKSE compatibility patch (V2)
+If you use [StepUpOnto SKSE](https://www.nexusmods.com/skyrimspecialedition/mods/175689) with SkyParkour / this mod, install the companion build so StepUp does not fire mid-parkour:
 
-If you use [StepUpOnto SKSE](https://www.nexusmods.com/skyrimspecialedition/mods/175689) with SkyParkour / this mod,
-install the companion patch so StepUp does not fire mid-parkour:
+- Dedicated repo: [StepUpOntoSKSE-patched](https://github.com/ShugokiFable/StepUpOntoSKSE-patched)
+- Patch sources in this tree: [`patches/StepUpOntoSKSE-V2`](patches/StepUpOntoSKSE-V2)
+- Binary tag: [StepUpOntoSKSE-NPCPathing-V2](https://github.com/ShugokiFable/Modern-NPC-Pathing/releases/tag/StepUpOntoSKSE-NPCPathing-V2)
 
-- Source: [patches/StepUpOntoSKSE-V2](patches/StepUpOntoSKSE-V2)
-- Binary release: [StepUpOntoSKSE-NPCPathing-V2](https://github.com/ShugokiFable/Modern-NPC-Pathing/releases/tag/StepUpOntoSKSE-NPCPathing-V2)
+## Credits
+
+SkyParkour V3 by Waffuru (graph events / `SkyParkourOngoing`). EVG Animated Traversal markers are used as routes when that mod is present. MCM Helper for the in-game menu. CommonLibSSE-NG (CharmedBaryon / REL lineage). Address Library (meh321). SKSE team.
+
+## License
+
+[GPL-3.0](LICENSE)
