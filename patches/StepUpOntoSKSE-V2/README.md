@@ -1,7 +1,7 @@
 # StepUpOnto SKSE - NPC Pathing Patch V2
 
 Companion compatibility build of **StepUpOnto SKSE** for use with
-[Modern NPC Pathing / NPC Pathing NG](https://github.com/ShugokiFable/Modern-NPC-Pathing).
+[Modern NPC Pathing / NPC Pathing NG](https://github.com/SenjuWoo/Modern-NPC-Pathing).
 
 Upstream: [StepUpOnto SKSE (Nexus 175689)](https://www.nexusmods.com/skyrimspecialedition/mods/175689) by **TheShinyHaxorus**.
 

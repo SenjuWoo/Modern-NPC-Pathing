@@ -12,9 +12,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ShugokiFable/Modern-NPC-Pathing/actions/workflows/build.yml"><img src="https://github.com/ShugokiFable/Modern-NPC-Pathing/actions/workflows/build.yml/badge.svg" alt="Build"></a>
+  <a href="https://github.com/SenjuWoo/Modern-NPC-Pathing/actions/workflows/build.yml"><img src="https://github.com/SenjuWoo/Modern-NPC-Pathing/actions/workflows/build.yml/badge.svg" alt="Build"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-7ee0ff?labelColor=0d0f11" alt="GPL-3.0"></a>
-  <a href="https://github.com/ShugokiFable/Modern-NPC-Pathing/releases/tag/v2.5.0"><img src="https://img.shields.io/badge/release-v2.5.0-7ee0ff?labelColor=0d0f11" alt="v2.5.0"></a>
+  <a href="https://github.com/SenjuWoo/Modern-NPC-Pathing/releases/tag/v2.5.0"><img src="https://img.shields.io/badge/release-v2.5.0-7ee0ff?labelColor=0d0f11" alt="v2.5.0"></a>
   <img src="https://img.shields.io/badge/SKSE-SE%20%2F%20AE-8f9aa6?labelColor=0d0f11" alt="SKSE SE/AE">
 </p>
 
@@ -86,7 +86,7 @@ EVG landings are ground-snapped, headroom- and capsule-cleared, never into water
 
 ## Install
 
-Install the FOMOD from [Releases](https://github.com/ShugokiFable/Modern-NPC-Pathing/releases) or [Nexus](https://www.nexusmods.com/skyrimspecialedition/mods/185413) with Mod Organizer 2 or Vortex.
+Install the FOMOD from [Releases](https://github.com/SenjuWoo/Modern-NPC-Pathing/releases) or [Nexus](https://www.nexusmods.com/skyrimspecialedition/mods/185413) with Mod Organizer 2 or Vortex.
 
 1. Let the installer detect SkyParkour / EVG.
 2. Keep the matching profile unless you want navmesh-failsafe only: **SkyParkour + EVG**, **SkyParkour only**, or **Navmesh failsafe**.
@@ -162,9 +162,9 @@ Not claimed:
 
 If you use [StepUpOnto SKSE](https://www.nexusmods.com/skyrimspecialedition/mods/175689) with SkyParkour / this mod, install the companion build so StepUp does not fire mid-parkour:
 
-- Dedicated repo: [StepUpOntoSKSE-patched](https://github.com/ShugokiFable/StepUpOntoSKSE-patched)
+- Dedicated repo: [StepUpOntoSKSE-patched](https://github.com/SenjuWoo/StepUpOntoSKSE-patched)
 - Patch sources in this tree: [`patches/StepUpOntoSKSE-V2`](patches/StepUpOntoSKSE-V2)
-- Binary tag: [StepUpOntoSKSE-NPCPathing-V2](https://github.com/ShugokiFable/Modern-NPC-Pathing/releases/tag/StepUpOntoSKSE-NPCPathing-V2)
+- Binary tag: [StepUpOntoSKSE-NPCPathing-V2](https://github.com/SenjuWoo/Modern-NPC-Pathing/releases/tag/StepUpOntoSKSE-NPCPathing-V2)
 
 ## Credits
 

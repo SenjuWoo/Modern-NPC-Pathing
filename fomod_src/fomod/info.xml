@@ -3,7 +3,7 @@
   <Name>NPC Pathing NG</Name>
   <Author>GennyWoo</Author>
   <Version MachineVersion="2.5.0">2.5.0</Version>
-  <Website>https://github.com/ShugokiFable/Modern-NPC-Pathing</Website>
+  <Website>https://github.com/SenjuWoo/Modern-NPC-Pathing</Website>
   <Description>Runtime navmesh failsafe for NPCs, with optional SkyParkour traversal, EVG Animated Traversal marker routes and follower parkour replay. SKSE plugin, ESL-flagged plugin, no hard dependencies beyond SKSE and Address Library.</Description>
   <Groups>
     <element>Gameplay</element>
