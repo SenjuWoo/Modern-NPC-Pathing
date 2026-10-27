@@ -58,6 +58,25 @@ namespace
     int  g_fruitlessScans = 0;
     bool g_scanEnabled = true;
     const RE::TESObjectCELL* g_currentCell = nullptr;
+
+    // Marker references per cell, collected once. The old scan walked every reference of every
+    // nearby cell (thousands in a city) for each stuck NPC; now a markerless cell is an empty
+    // vector and a lookup is a handful of comparisons. Dropped on cell change and game load.
+    std::unordered_map<RE::FormID, std::vector<RE::ObjectRefHandle>> g_cellMarkers;
+
+    const std::vector<RE::ObjectRefHandle>& MarkersIn(const RE::TESObjectCELL* a_cell)
+    {
+        auto [it, inserted] = g_cellMarkers.try_emplace(a_cell->GetFormID());
+        if (inserted) {
+            a_cell->ForEachReference([&](RE::TESObjectREFR* a_ref) {
+                if (a_ref && !a_ref->IsDeleted() && EvgTraversal::IsTraversalFurniture(a_ref->GetBaseObject())) {
+                    it->second.push_back(a_ref->GetHandle());
+                }
+                return RE::BSContainer::ForEachResult::kContinue;
+            });
+        }
+        return it->second;
+    }
 }
 
 namespace EvgTraversal
@@ -66,6 +85,7 @@ namespace EvgTraversal
     {
         g_resolvedIDs.clear();
         g_kinds.clear();
+        g_cellMarkers.clear();
         g_available = false;
 
         auto* dataHandler = RE::TESDataHandler::GetSingleton();
@@ -82,10 +102,10 @@ namespace EvgTraversal
 
         g_available = !g_resolvedIDs.empty();
         if (g_available) {
-            spdlog::info("NPCPathingNG: EVG Animated Traversal found — {} marker types usable as routes",
+            logger::info("NPCPathingNG: EVG Animated Traversal found — {} marker types usable as routes",
                          g_resolvedIDs.size());
         } else {
-            spdlog::info("NPCPathingNG: EVG Animated Traversal not present — marker routes disabled");
+            logger::info("NPCPathingNG: EVG Animated Traversal not present — marker routes disabled");
         }
     }
 
@@ -104,10 +124,13 @@ namespace EvgTraversal
         // Re-arm the scan latch when the player travels to a new cell. A
         // markerless area latched scanning off; the next area must get a fresh
         // chance without a reload.
-        if (a_cell && g_currentCell && g_currentCell != a_cell && !g_scanEnabled) {
-            g_scanEnabled = true;
-            g_fruitlessScans = 0;
-            spdlog::info("NPCPathingNG: player cell changed — EVG marker scanning re-armed");
+        if (a_cell && g_currentCell && g_currentCell != a_cell) {
+            g_cellMarkers.clear();
+            if (!g_scanEnabled) {
+                g_scanEnabled = true;
+                g_fruitlessScans = 0;
+                logger::info("NPCPathingNG: player cell changed — EVG marker scanning re-armed");
+            }
         }
         g_currentCell = a_cell;
     }
@@ -116,13 +139,14 @@ namespace EvgTraversal
     {
         g_fruitlessScans = 0;
         g_scanEnabled = true;
+        g_cellMarkers.clear();
     }
 
     void NoteFruitlessScan()
     {
         if (g_scanEnabled && ++g_fruitlessScans >= kNpcFailureLimit) {
             g_scanEnabled = false;
-            spdlog::info(
+            logger::info(
                 "NPCPathingNG: EVG marker scanning paused for this cell — {} scans found no "
                 "marker nearby. Re-armed on cell change or the next game load.",
                 g_fruitlessScans);
@@ -171,6 +195,11 @@ namespace EvgTraversal
                 }
 
                 const RE::NiPoint3 mPos = a_ref->GetPosition();
+                const float flatX = mPos.x - pos.x;
+                const float flatY = mPos.y - pos.y;
+                if (flatX * flatX + flatY * flatY > a_radius * a_radius) {
+                    return RE::BSContainer::ForEachResult::kContinue;
+                }
                 if (std::abs(mPos.z - pos.z) > 200.0f) {
                     return RE::BSContainer::ForEachResult::kContinue;
                 }
@@ -203,19 +232,22 @@ namespace EvgTraversal
                 return RE::BSContainer::ForEachResult::kContinue;
             };
 
-        // Deliberately NOT TES::ForEachReferenceInRange: that helper ends every
-        // scan with worldSpace->GetSkyCell(), and TES::worldSpace can dangle
-        // during cell transitions — confirmed crash (AE id 20543, this+0xF8).
-        // Markers are never in the sky cell, so we walk the cells ourselves.
+        // Deliberately NOT TES::ForEachReferenceInRange: that helper ends every scan with
+        // worldSpace->GetSkyCell(), and TES::worldSpace can dangle during cell transitions —
+        // confirmed crash (AE id 20543, this+0xF8). We walk the cells ourselves, from the cache.
+        auto scanCell = [&](const RE::TESObjectCELL* a_cell) {
+            for (const auto& handle : MarkersIn(a_cell)) {
+                if (auto ref = handle.get()) {
+                    visit(ref.get());
+                }
+            }
+        };
+
         if (tes->interiorCell) {
-            tes->interiorCell->ForEachReferenceInRange(pos, a_radius, visit);
+            scanCell(tes->interiorCell);
         } else if (auto* grid = tes->gridCells; grid && grid->length > 0) {
-            // A 250-unit radius cannot reach past the actor's own cell and its
-            // immediate neighbours, but this used to call ForEachReferenceInRange
-            // on ALL attached cells in the grid (25 at uGridsToLoad=5). Each of
-            // those iterates every reference in the cell, which in a dense city
-            // is thousands of refs — per stuck NPC, per unstick attempt. Reject
-            // cells whose bounds are outside the radius first.
+            // A 250-unit radius cannot reach past the actor's own cell and its immediate
+            // neighbours; reject cells whose bounds are outside the radius first.
             constexpr float kCellSize = 4096.0f;
             const float r2 = a_radius * a_radius;
             const auto length = grid->length;
@@ -228,14 +260,13 @@ namespace EvgTraversal
                     if (auto* coords = cell->GetCoordinates()) {
                         const float minX = static_cast<float>(coords->cellX) * kCellSize;
                         const float minY = static_cast<float>(coords->cellY) * kCellSize;
-                        // Squared point-to-AABB distance in the XY plane.
                         const float dx = std::max({ minX - pos.x, 0.0f, pos.x - (minX + kCellSize) });
                         const float dy = std::max({ minY - pos.y, 0.0f, pos.y - (minY + kCellSize) });
                         if (dx * dx + dy * dy > r2) {
                             continue;
                         }
                     }
-                    cell->ForEachReferenceInRange(pos, a_radius, visit);
+                    scanCell(cell);
                 }
             }
         }

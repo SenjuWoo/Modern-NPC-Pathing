@@ -1,0 +1,26 @@
+#include <winver.h>
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+ PRODUCTVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+ FILEFLAGSMASK 0x3fL
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_DLL
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904b0"
+    BEGIN
+      VALUE "CompanyName", "GennyWoo"
+      VALUE "FileDescription", "NPC Pathing NG - NPC traversal and navmesh failsafe"
+      VALUE "FileVersion", "@PROJECT_VERSION@"
+      VALUE "InternalName", "NPCPathingNG"
+      VALUE "OriginalFilename", "NPCPathingNG.dll"
+      VALUE "ProductName", "NPC Pathing NG"
+      VALUE "ProductVersion", "@PROJECT_VERSION@"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END

@@ -1,124 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://qconsulting.ca/fo3/ModConfig5.0.xsd">
-  <moduleName>NPC Pathing NG 2.5.0</moduleName>
+  <moduleName>NPC Pathing NG 3.0.0</moduleName>
 
-  <!-- Core plugin, ESP, SEQ and MCM config are always installed.
-       The only hard requirements are SKSE and Address Library, neither of
-       which is a plugin file, so they cannot be probed here. -->
+  <!-- One installer, no pages. Everything that depends on what else is installed is decided here
+       (file patterns) or at game start (the DLL detects SkyParkour, EVG Animated Traversal,
+       Fluid Motion, FluidMotionNPC and NpcTraversalNG by itself, see README "Compatibility").
+       The only hard requirements are SKSE and Address Library, neither of which is a plugin
+       file, so they cannot be probed here. -->
+
+  <!-- Always installed: plugin, SEQ, MCM config, settings INI and the SKSE DLL. -->
   <requiredInstallFiles>
     <folder source="core" destination="" priority="0"/>
   </requiredInstallFiles>
 
-  <installSteps order="Explicit">
-    <installStep name="Configuration">
-      <optionalFileGroups order="Explicit">
-        <group name="Traversal features (auto-detected)" type="SelectExactlyOne">
-          <plugins order="Explicit">
-
-            <plugin name="SkyParkour + EVG markers (recommended)">
-              <description>Stuck NPCs vault, step and climb using SkyParkour animations, followers reproduce your parkour route, and NPCs use EVG Animated Traversal markers as routes (a SkyParkour move along the marker's heading, or a collision-validated hop across). Also includes the navmesh failsafe and the door/teleport handling.
-
-REQUIRES: SkyParkour V3 plus its NPC behaviour patch for the parkour part. If SkyParkour is not installed, this option still installs fine but parkour simply does nothing - pick "Navmesh failsafe only" instead.
-
-EVG Animated Traversal is optional: with EVG installed its markers are used automatically, and without it nothing changes.</description>
-              <conditionFlags>
-                <flag name="NPNG_CONFIG">recommended</flag>
-              </conditionFlags>
-              <typeDescriptor>
-                <dependencyType>
-                  <defaultType name="Optional"/>
-                  <patterns>
-                    <pattern>
-                      <dependencies operator="And">
-                        <fileDependency file="SkyParkour.esp" state="Active"/>
-                      </dependencies>
-                      <type name="Recommended"/>
-                    </pattern>
-                  </patterns>
-                </dependencyType>
-              </typeDescriptor>
-            </plugin>
-
-            <plugin name="SkyParkour only (no EVG markers)">
-              <description>As above, but EVG marker routes are disabled - only SkyParkour traversal, follower replay and the navmesh failsafe. Pick this if you want NPCs to keep clear of EVG marker furniture entirely.
-
-REQUIRES: SkyParkour V3 plus its NPC behaviour patch. Without SkyParkour the parkour part simply does nothing.</description>
-              <conditionFlags>
-                <flag name="NPNG_CONFIG">noevg</flag>
-              </conditionFlags>
-              <typeDescriptor>
-                <dependencyType>
-                  <defaultType name="Optional"/>
-                  <patterns>
-                    <pattern>
-                      <dependencies operator="And">
-                        <fileDependency file="SkyParkour.esp" state="Active"/>
-                      </dependencies>
-                      <type name="Recommended"/>
-                    </pattern>
-                  </patterns>
-                </dependencyType>
-              </typeDescriptor>
-            </plugin>
-
-            <plugin name="Navmesh failsafe only (no SkyParkour)">
-              <description>Only the navmesh failsafe: stuck detection, doorway handling and the validated teleport bypass. No parkour animations and no EVG marker routes.
-
-Pick this if you do not use SkyParkour. Nothing else is required.</description>
-              <conditionFlags>
-                <flag name="NPNG_CONFIG">failsafe</flag>
-              </conditionFlags>
-              <typeDescriptor>
-                <dependencyType>
-                  <defaultType name="Optional"/>
-                  <patterns>
-                    <pattern>
-                      <dependencies operator="And">
-                        <fileDependency file="SkyParkour.esp" state="Missing"/>
-                      </dependencies>
-                      <type name="Recommended"/>
-                    </pattern>
-                    <pattern>
-                      <dependencies operator="And">
-                        <fileDependency file="SkyParkour.esp" state="Inactive"/>
-                      </dependencies>
-                      <type name="Recommended"/>
-                    </pattern>
-                  </patterns>
-                </dependencyType>
-              </typeDescriptor>
-            </plugin>
-
-          </plugins>
-        </group>
-      </optionalFileGroups>
-    </installStep>
-  </installSteps>
-
   <conditionalFileInstalls>
     <patterns>
+      <!-- StepUpOnto SKSE present: ship the SkyParkour-aware build of its DLL (same settings,
+           same INI; it only stays hands-off while a SkyParkour move is running). Without
+           StepUpOnto nothing is installed. If your mod manager cannot see non-plugin files
+           and skips this, extras/StepUpOntoSKSE_patch holds the same DLL for a manual copy. -->
       <pattern>
         <dependencies operator="And">
-          <flagDependency flag="NPNG_CONFIG" value="recommended"/>
+          <fileDependency file="SKSE\Plugins\StepUpOntoSKSE.dll" state="Active"/>
         </dependencies>
         <files>
-          <folder source="ini_recommended" destination="" priority="1"/>
-        </files>
-      </pattern>
-      <pattern>
-        <dependencies operator="And">
-          <flagDependency flag="NPNG_CONFIG" value="noevg"/>
-        </dependencies>
-        <files>
-          <folder source="ini_noevg" destination="" priority="2"/>
-        </files>
-      </pattern>
-      <pattern>
-        <dependencies operator="And">
-          <flagDependency flag="NPNG_CONFIG" value="failsafe"/>
-        </dependencies>
-        <files>
-          <folder source="ini_failsafe" destination="" priority="3"/>
+          <folder source="patch_stepuponto" destination="" priority="1"/>
         </files>
       </pattern>
     </patterns>

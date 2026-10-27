@@ -3,54 +3,49 @@
 ## Requirements
 
 - Windows x64
-- Visual Studio 2022 or newer with Desktop C++ tools
-- CMake 3.21+
+- Visual Studio 2022 or 2026 with the Desktop C++ workload (MSVC 19.4x or newer)
+- CMake 3.25+
 - Python 3.10+
-- vcpkg (`VCPKG_ROOT` or `VCPKG_INSTALLATION_ROOT` set)
-- CommonLibSSE-NG commit `b93280e832f263dbef44e44cbe2936622a02f91a`
+- vcpkg (`VCPKG_ROOT` or `VCPKG_INSTALLATION_ROOT` set; `git clone https://github.com/microsoft/vcpkg` and run `bootstrap-vcpkg.bat`)
+- [CommonLibSSE-NG](https://github.com/alandtse/CommonLibSSE-NG) tag **v14.1.0** (SE + AE + VR layouts in one library)
+
+The plugin links the C++ runtime statically (`/MT`, vcpkg triplet `x64-windows-static`), so players need no Visual C++ Redistributable. The vcpkg dependencies come from `vcpkg.json` (manifest mode, baseline pinned) and are restored automatically on configure.
 
 ## One-command release build
 
 From PowerShell in the repository root:
 
 ```powershell
-./build_release.ps1 -Generator "Visual Studio 17 2022"
+./build_release.ps1
 ```
 
-The script pins CommonLibSSE-NG, builds it and the plugin with the static MSVC runtime, runs validation, and creates the Nexus archive.
+The script clones CommonLibSSE-NG at the pinned tag, configures and builds the plugin and the StepUpOnto patch (CommonLib itself compiles once, roughly 15 minutes cold), runs the unit tests, and writes the FOMOD to `dist/`.
 
-The clean GitHub/source tree intentionally does not contain a DLL. The script creates it only for the release package.
+The clean source tree intentionally does not contain a DLL.
 
-The included presets can also configure and build the plugin after CommonLibSSE-NG has been installed:
-
-```powershell
-cmake --preset windows-msvc
-cmake --build --preset windows-msvc-release
-```
-
-## Manual clean build
+## Manual build
 
 ```powershell
-git clone https://github.com/CharmedBaryon/CommonLibSSE-NG.git extern/CommonLibSSE
-git -C extern/CommonLibSSE checkout b93280e832f263dbef44e44cbe2936622a02f91a
+git clone https://github.com/alandtse/CommonLibSSE-NG.git extern/CommonLibSSE
+git -C extern/CommonLibSSE checkout v14.1.0
+git -C extern/CommonLibSSE submodule update --init --depth 1
 
-cmake -S extern/CommonLibSSE -B extern/CommonLibSSE/build `
-  -G "Visual Studio 17 2022" -A x64 `
-  -DBUILD_TESTS=OFF -DENABLE_SKYRIM_VR=OFF `
-  -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded `
-  -DCMAKE_INSTALL_PREFIX="$PWD/extern/CommonLibSSE/install" `
-  -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
-  -DVCPKG_TARGET_TRIPLET=x64-windows-static `
-  -DVCPKG_HOST_TRIPLET=x64-windows-static
-cmake --build extern/CommonLibSSE/build --config Release --target install
+$env:VCPKG_ROOT = "C:\path\to\vcpkg"
+cmake --preset windows-msvc          # use windows-msvc-2022 on Visual Studio 2022
+cmake --build build --config RelWithDebInfo --target NPCPathingNG StepUpOntoSKSE
 
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64
-cmake --build build --config Release
 python generate_esp.py
 python -m unittest discover -s tests -v
-python tools/package_release.py
+tools\run_unit_tests.bat             # game-independent arc solver tests (MSVC only)
+python tools/package_fomod.py        # dist/NPC Pathing NG <version> FOMOD.zip
 ```
 
-The compiled DLL is written to `package/Data/SKSE/Plugins/NPCPathingNG.dll`. The final Nexus archive is written to `dist/`.
+The plugin DLL is written to `package/Data/SKSE/Plugins/NPCPathingNG.dll`; the StepUpOnto patch DLL to `build/patch_stepuponto/SKSE/Plugins/StepUpOntoSKSE.dll` and is shipped only through the FOMOD.
 
-Do not distribute `build/`, `extern/`, vcpkg packages, object files, PDBs, nested `.git` directories, or old ZIP files. They are development material and can inflate a sub-megabyte mod into hundreds of megabytes.
+`package_fomod.py` re-opens the archive it wrote and fails on: a member outside the allowlist, a payload that differs from staging, a missing FOMOD source, a DLL without the SKSE exports or the version string, or an install branch that does not simulate to the expected file set.
+
+Do not distribute `build/`, `extern/`, `vcpkg_installed/`, vcpkg packages, object files, PDBs, nested `.git` directories, or old ZIP files. They are development material and can inflate a sub-megabyte mod into hundreds of megabytes.
+
+## CommonLibSSE-NG upgrades
+
+The tag is pinned in three places that must change together: `BUILDING.md`, `build_release.ps1` and `.github/workflows/build.yml` (`COMMONLIB_TAG`); `tests/test_release.py` fails when they disagree. Also compare the dependency list in `vcpkg.json` with the library's own `vcpkg.json`. After an upgrade, rebuild from a clean `build/` directory.

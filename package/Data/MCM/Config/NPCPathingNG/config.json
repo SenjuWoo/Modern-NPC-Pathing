@@ -15,6 +15,8 @@
                 {"id": "fStuckDistance", "text": "Stuck Distance", "help": "An NPC trying to move but covering less than this many units per sample counts as stuck.", "type": "slider", "valueOptions": {"min": 1, "max": 10, "step": 0.5, "formatString": "{1}", "sourceType": "GlobalValue", "sourceForm": "NPCPathingNG.esp|803"}},
                 {"id": "fCooldown", "text": "Cooldown (s)", "help": "Seconds before the same NPC can be unstuck again. Followers use half of this.", "type": "slider", "valueOptions": {"min": 0.5, "max": 10, "step": 0.5, "formatString": "{1}", "sourceType": "GlobalValue", "sourceForm": "NPCPathingNG.esp|804"}},
                 {"id": "iActorsPerFrame", "text": "NPCs Scanned Per Frame", "help": "Round-robin slice size. 10 covers a busy city within a few frames.", "type": "slider", "valueOptions": {"min": 1, "max": 50, "step": 1, "formatString": "{0}", "sourceType": "GlobalValue", "sourceForm": "NPCPathingNG.esp|805"}},
+                {"text": "Performance", "type": "header"},
+                {"id": "fFrameBudgetMs", "text": "Frame Budget (ms)", "help": "Soft cap on this mod's work per frame. Detection is always cheap; the expensive part (ledge sweeps, leap planning) is queued and runs a couple per frame while under this budget, so a crowd of stuck NPCs can never cause a frame spike. Lower = smoother but slower to react. 0 = no cap.", "type": "slider", "valueOptions": {"min": 0, "max": 3, "step": 0.1, "formatString": "{1}", "sourceType": "GlobalValue", "sourceForm": "NPCPathingNG.esp|816"}},
                 {"text": "Debug", "type": "header"},
                 {"id": "bDebugLogging", "text": "Debug Logging", "help": "Log every parkour/teleport event to NPCPathingNG.log.", "type": "toggle", "valueOptions": {"sourceType": "GlobalValue", "sourceForm": "NPCPathingNG.esp|80F"}}
             ]
@@ -34,6 +36,16 @@
                 {"id": "bTeleportFallback", "text": "Teleport Bypass", "help": "When SkyParkour and EVG cannot help, sidestep-teleport the NPC around the obstacle as a collision-validated last resort.", "type": "toggle", "valueOptions": {"sourceType": "GlobalValue", "sourceForm": "NPCPathingNG.esp|809"}},
                 {"id": "fSnapDistance", "text": "Bypass Distance", "help": "How far sideways the bypass teleport goes.", "type": "slider", "valueOptions": {"min": 40, "max": 300, "step": 10, "formatString": "{0}", "sourceType": "GlobalValue", "sourceForm": "NPCPathingNG.esp|80A"}},
                 {"id": "iTeleportEscalation", "text": "Teleport Last-Resort Threshold", "help": "How many times an NPC must fail to escape via parkour/EVG before a teleport is allowed. Higher = teleport is rarer and animated traversal is preferred. Combined with a genuine wall-block check, this stops NPCs teleporting when they could path or climb instead.", "type": "slider", "valueOptions": {"min": 1, "max": 10, "step": 1, "formatString": "{0}", "sourceType": "GlobalValue", "sourceForm": "NPCPathingNG.esp|812"}}
+            ]
+        },
+        {
+            "pageDisplayName": "Compatibility",
+            "cursorFillMode": "topToBottom",
+            "content": [
+                {"text": "Fluid Motion / NpcTraversalNG", "type": "header"},
+                {"id": "iCompatMode", "text": "Compatibility Mode", "help": "Auto (recommended): the mod detects Fluid Motion and NpcTraversalNG (Enemies Can Jump and Vault) at game start. If either handles NPC jumps/vaults/climbs, they act first and this mod only steps in as a fallback for NPCs they left stuck, and never moves an NPC they are flying. Without them this mod does the hurdle/vault/drop itself. Always run own traversal: ignore the other mods (can double-handle an NPC). Passive: never run the own leap; parkour, EVG hop and teleport only as a late fallback.", "type": "enum", "valueOptions": {"options": ["Auto (recommended)", "Always run own traversal", "Passive (fallback only)"], "sourceType": "GlobalValue", "sourceForm": "NPCPathingNG.esp|815"}},
+                {"text": "Own Traversal", "type": "header"},
+                {"id": "bEnableLeap", "text": "Own Hurdle / Vault / Drop", "help": "Stuck humanoids hurdle fences, vault onto ledges and drop down toward their target along a collision-checked arc with the vanilla jump animations. No animation files needed. Switched off automatically while Fluid Motion or NpcTraversalNG owns NPC jumps (Auto mode). Tuning (heights, distances) is in NPCPathingNG.ini under [Leap].", "type": "toggle", "valueOptions": {"sourceType": "GlobalValue", "sourceForm": "NPCPathingNG.esp|814"}}
             ]
         },
         {

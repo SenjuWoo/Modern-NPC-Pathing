@@ -1,42 +1,37 @@
-# NPC Pathing NG v2.5.0
+# NPC Pathing NG v3.0.0
 
-Runtime navmesh failsafe for Skyrim SE/AE humanoid NPCs, with optional SkyParkour vault/climb, EVG Animated Traversal marker routes, and follower parkour replay.
+SKSE plugin for Skyrim SE/AE (one DLL, built on CommonLibSSE-NG v14.1.0). Unsticks NPCs: hurdle, vault, drop, parkour and EVG marker routes, with a compatibility layer for Fluid Motion and NpcTraversalNG.
 
 ## Does
 
-- Unsticks humanoids that are trying to walk but not moving
-- Optional SkyParkour vault/climb + follower replay of your parkour
-- EVG Animated Traversal markers used as **routes** (on by default): marker-guided parkour, then a collision-validated hop across. Never activates the furniture (engine limit)
-- Doorway-aware handling (does not shove NPCs out of chokepoints)
-- Validated last-resort sidestep teleport (can be disabled)
-- MCM (MCM Helper) or INI fallback
+- Detects NPCs that are trying to walk but not moving and gets them going again
+- **Own hurdle / vault / drop** for humanoids (vanilla jump animations, collision-checked arc) when no other mod owns NPC jumps
+- Optional SkyParkour vault/climb and follower replay of your moves
+- EVG Animated Traversal markers used as routes (never furniture activation)
+- Doorway-aware handling; validated last-resort teleport
+- **Detects Fluid Motion, FluidMotionNPC and NpcTraversalNG (Enemies Can Jump and Vault) and lets them go first**; it never moves an NPC they are flying
+- Frame-time budget: heavy work is queued and capped per frame
+- MCM (MCM Helper) or INI
 
-## Does not
+## Install
 
-- **EVG is not required.** With EVG Animated Traversal installed, its markers are used as NPC routes; without it, nothing changes
-- Not a full AI or pathfinding rewrite
-- Default max climb is **130** units (not full cliffs unless you raise it)
-- Parkour is capped to **1600** units from the player by default (SkyParkour climb SFX are 2D). Set `fParkourMaxPlayerDistance=0` for the old unlimited range.
+One FOMOD, no choices. It installs the plugin, SEQ, MCM config, INI and DLL, and the SkyParkour-aware StepUpOnto SKSE build only if StepUpOnto is detected (otherwise `extras/StepUpOntoSKSE_patch` holds it for a manual copy).
 
-## Requirements
-
-- SKSE64 + Address Library
-- Optional: SkyParkour V3 + behavior patch; SkyUI + MCM Helper; EVG Animated Traversal (for marker routes)
+Requires SKSE64 and Address Library. Optional: SkyParkour V3, SkyUI + MCM Helper, EVG Animated Traversal. No Visual C++ Redistributable needed.
 
 ## Config
 
-- MCM: **NPC Pathing NG**
+- MCM: **NPC Pathing NG** (General, Parkour, Compatibility, Followers & Combat)
 - INI: `Data/SKSE/Plugins/NPCPathingNG.ini`
-- Defaults: EVG marker routes **on** (`bEnableEVGTraversal=1`), followers on, combat on, indoor parkour off, climb 130, parkour max distance 1600
+- Compatibility mode (MCM or `[Compat] sMode`): Auto (default) / Force / Passive
+- Log: `Documents/My Games/Skyrim Special Edition/SKSE/NPCPathingNG.log` (first lines show what was detected)
 
-## 2.5.0
+## Does not
 
-EVG markers as routes: a stuck NPC near a marker approaches it from the entry side, parkours along its heading when the geometry matches, otherwise hops across to a bounds-validated landing (ladders/ledges up, drops/rolls down, squeezes/vaults across). The furniture-activation path is removed (it was engine-rejected for NPCs), the scan latch re-arms on cell change, and the feature is on by default. No save cleaning needed.
+- Replace pathfinding or combat AI
+- Climb mountains at the default 130-unit cap
+- Move creatures: the own leap is humanoid-only (NpcTraversalNG covers creatures)
 
-## 2.4.8
+## Not tested in game
 
-Restores the 2.4.4 ESP (`MCM_ConfigBase`) after yanked 2.4.5 dual-MCM issue. No `NPNG_MCMBridge` scripts. If you loaded 2.4.5, remove leftover `NPNG_MCMBridge.pex`; orphan empty menu may linger on that save.
-
-## Logs
-
-`Documents/My Games/Skyrim Special Edition/SKSE/NPCPathingNG.log`
+This build was compiled, unit-tested and package-verified, not played. If it crashes on load, roll back to 2.5.0 and send the log.

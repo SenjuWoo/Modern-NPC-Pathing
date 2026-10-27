@@ -156,12 +156,12 @@ namespace Menu
 		if (ImGui::Button("Save INI")) {
 			s->Clamp();
 			s->Save();
-			RE::DebugNotification("StepUpOnto: settings saved");
+			RE::SendHUDMessage::ShowHUDMessage("StepUpOnto: settings saved");
 		}
 		ImGui::SameLine();
 		if (ImGui::Button("Reload INI")) {
 			s->Load();
-			RE::DebugNotification("StepUpOnto: settings reloaded");
+			RE::SendHUDMessage::ShowHUDMessage("StepUpOnto: settings reloaded");
 		}
 		ImGui::SameLine();
 		if (ImGui::Button("Defaults")) {
@@ -171,7 +171,7 @@ namespace Menu
 			if (npcPerfOverlayWindow) {
 				npcPerfOverlayWindow->IsOpen.store(false);
 			}
-			RE::DebugNotification("StepUpOnto: restored defaults");
+			RE::SendHUDMessage::ShowHUDMessage("StepUpOnto: restored defaults");
 		}
 	}
 

@@ -1,5 +1,8 @@
 #include "pathing.h"
+#include "budget.h"
+#include "compat.h"
 #include "evg_traversal.h"
+#include "leap.h"
 #include "npc_parkour.h"
 #include "parkour_types.h"
 #include "raycast.h"
@@ -40,21 +43,7 @@ namespace
         return YawToForward(a_actor->GetAngleZ());
     }
 
-    // A ray that lands on an actor's body (the player or another NPC) is a
-    // dynamic obstacle, not a navmesh failure — never a reason to reposition.
-    bool IsActorHit(const Raycast::Result& a_hit)
-    {
-        switch (a_hit.layer) {
-        case RE::COL_LAYER::kCharController:
-        case RE::COL_LAYER::kBiped:
-        case RE::COL_LAYER::kBipedNoCC:
-        case RE::COL_LAYER::kDeadBip:
-            return true;
-        default:
-            break;
-        }
-        return a_hit.hitRef && a_hit.hitRef->GetFormType() == RE::FormType::ActorCharacter;
-    }
+    using Raycast::IsActorHit;
 
     // How close a follower must be to a recorded player parkour point to replay it.
     // 110 with the startPos-gap cap in TryParkour keeps the wrong-ledge/drag
@@ -64,36 +53,19 @@ namespace
     constexpr float kReplayMinPlayerAbove = 40.0f;
     constexpr double kReplayEventLifetime = 120.0;  // seconds
 
+    // After a body was in the air (another mod's jump, or ours) it is not stuck for this long.
+    constexpr double kYieldWindow = 1.2;  // seconds
+
     // Self-heal window after a traversal we initiated: any residual pitch/roll
     // found on the actor inside this window is contamination, not intent.
     constexpr double kPostureGuardWindow = 15.0;  // seconds
     constexpr float kPostureEpsilon = 0.02f;      // radians (~1.1 deg)
-
-    // Per-frame tick: hook PlayerCharacter::Update (vfunc 0xAD). Runs on the main
-    // thread once per frame during gameplay, paused in menus.
-    struct PlayerUpdateHook
-    {
-        static void thunk(RE::PlayerCharacter* a_this, float a_delta)
-        {
-            func(a_this, a_delta);
-            PathingManager::GetSingleton()->OnFrame(a_delta);
-        }
-        static inline REL::Relocation<decltype(thunk)> func;
-
-        static void Install()
-        {
-            REL::Relocation<std::uintptr_t> vtbl{ RE::VTABLE_PlayerCharacter[0] };
-            func = vtbl.write_vfunc(0xAD, thunk);
-            spdlog::info("NPCPathingNG: PlayerCharacter::Update hook installed");
-        }
-    };
 }
 
 void PathingManager::Install()
 {
     auto* mgr = GetSingleton();
     mgr->CacheKeywords();
-    PlayerUpdateHook::Install();
 }
 
 void PathingManager::CacheKeywords()
@@ -295,14 +267,14 @@ bool PathingManager::PassesDynamicFilter(RE::Actor* a_actor) const
 
     // Already parkouring (triggered by us or anything else)?
     bool ongoing = false;
-    if (a_actor->GetGraphVariableBool(SkyParkourGraph::VarOngoing, ongoing) && ongoing) {
+    if (a_actor->GetGraphVariableBool(SkyParkourGraph::VarOngoing(), ongoing) && ongoing) {
         return false;
     }
 
     // In dialogue with the player: the dialogue system holds the NPC in place
     // while their movement graph keeps "walking" — a classic false-stuck that
     // made conversation partners teleport around mid-sentence.
-    if (auto* ui = RE::UI::GetSingleton(); ui && ui->IsMenuOpen(RE::DialogueMenu::MENU_NAME)) {
+    if (dialogueMenuOpen) {  // sampled once per frame: IsMenuOpen builds a pooled string per call
         if (auto* topicManager = RE::MenuTopicManager::GetSingleton()) {
             auto speaker = topicManager->speaker.get();
             if (speaker && speaker.get() == a_actor) {
@@ -344,7 +316,7 @@ void PathingManager::TrackPlayerParkour()
 
     bool ongoing = false;
     if (settings->enableParkour) {
-        player->GetGraphVariableBool(SkyParkourGraph::VarOngoing, ongoing);
+        player->GetGraphVariableBool(SkyParkourGraph::VarOngoing(), ongoing);
 
         if (ongoing && !playerWasParkouring) {
             PlayerParkourEvent ev;
@@ -392,6 +364,11 @@ bool PathingManager::TryFollowerReplay(RE::Actor* a_actor, ActorEntry& a_entry)
     auto* settings = Settings::GetSingleton();
     auto* player = RE::PlayerCharacter::GetSingleton();
     if (!player || playerEvents.empty()) {
+        return false;
+    }
+    // Each attempt is a full ledge sweep. Retry a few times a second at most, and not at all
+    // once this frame's budget is gone.
+    if (now < a_entry.nextReplayTry || OutOfBudget()) {
         return false;
     }
 
@@ -458,6 +435,8 @@ bool PathingManager::TryFollowerReplay(RE::Actor* a_actor, ActorEntry& a_entry)
             continue;
         }
 
+        a_entry.nextReplayTry = now + 0.6;
+
         // Attempt the same move the player made. TryParkour only touches the
         // follower's facing if a valid ledge is actually found — failed probes
         // must never fight the AI's own rotation (caused visible twitching).
@@ -509,6 +488,24 @@ void PathingManager::ProcessDetection(RE::Actor* a_actor, ActorEntry& a_entry)
         return;
     }
 
+    // Another mod (Fluid Motion, NpcTraversalNG) or our own leap has this body in the air or
+    // just put it down: it is being moved on purpose, not stuck. Remember it for a short window
+    // so the landing sample is not mistaken for a wedge either.
+    const RE::FormID fid = a_actor->GetFormID();
+    if (auto* airCtrl = a_actor->GetCharController();
+        airCtrl && airCtrl->context.currentState != RE::hkpCharacterStateType::kOnGround) {
+        a_entry.lastAirTime = now;
+    }
+    const bool otherModBusy = Compat::ExternalTraversing(fid);
+    if (otherModBusy || Leap::IsFlying(fid) || now - a_entry.lastAirTime < kYieldWindow ||
+        Leap::SinceLastFlight(fid, now) < kYieldWindow) {
+        a_entry.stuckCount = 0;
+        if (otherModBusy) {
+            ++npng::FrameBudget::Get().stats.yielded;
+        }
+        return;
+    }
+
     // Posture guard: after a traversal we initiated (SkyParkour job or EVG
     // furniture), any leftover pitch/roll is contamination — the engine rights
     // the player from camera input every frame but never rights NPCs, so a
@@ -518,7 +515,7 @@ void PathingManager::ProcessDetection(RE::Actor* a_actor, ActorEntry& a_entry)
     const double lastTraversal = std::max(a_entry.lastEvgTime, a_entry.lastTraversalEnd);
     if (now - lastTraversal < kPostureGuardWindow && !a_actor->IsInCombat()) {
         bool ongoing = false;
-        a_actor->GetGraphVariableBool(SkyParkourGraph::VarOngoing, ongoing);
+        a_actor->GetGraphVariableBool(SkyParkourGraph::VarOngoing(), ongoing);
         auto* state = a_actor->AsActorState();
         auto* ctrl = a_actor->GetCharController();
         const bool settled = !ongoing && state && ctrl &&
@@ -582,21 +579,28 @@ void PathingManager::ProcessDetection(RE::Actor* a_actor, ActorEntry& a_entry)
 
     // Followers react twice as fast and retry sooner — losing the player's
     // trail is the thing this mod exists to fix.
-    const int threshold = teammate ? std::max(1, settings->stuckThreshold / 2)
-                                   : settings->stuckThreshold;
+    // When Fluid Motion / NpcTraversalNG are handling stuck NPCs, give them the first go: wait
+    // twice as long before this plugin steps in as the fallback.
+    const int assistScale = Compat::AssistOnly() ? 2 : 1;
+    const int threshold = (teammate ? std::max(1, settings->stuckThreshold / 2)
+                                    : settings->stuckThreshold) * assistScale;
     const float cooldown = teammate ? settings->cooldown * 0.5f : settings->cooldown;
 
     if (a_entry.stuckCount >= threshold) {
         a_entry.stuckCount = 0;
         a_entry.cooldownUntil = now + cooldown;
         a_entry.escalation++;  // Unstick resets this to 0 on a successful traversal
-        Unstick(a_actor, a_entry, teammate);
+        // The attempt itself is expensive (dozens of rays): queue it, DrainPending runs it
+        // within the frame budget.
+        if (!a_entry.queued && pending.size() < 64) {
+            a_entry.queued = true;
+            pending.push_back({ a_actor->GetHandle(), teammate });
+        }
     }
 }
 
 void PathingManager::Unstick(RE::Actor* a_actor, ActorEntry& a_entry, bool a_teammate)
 {
-    (void)a_teammate;
     auto* settings = Settings::GetSingleton();
 
     // 0) Crowd jam: another actor is directly ahead. Nothing below can resolve
@@ -620,6 +624,18 @@ void PathingManager::Unstick(RE::Actor* a_actor, ActorEntry& a_entry, bool a_tea
         return;
     }
 
+    // 1a) Own ballistic hurdle / vault / drop, for users with no SkyParkour and no other
+    //     jump mod. Off automatically when Fluid Motion or NpcTraversalNG owns jumps.
+    if (settings->enableLeap && !Compat::JumpsOwnedByOther()) {
+        RE::NiPoint3 goal;
+        const bool hasGoal = GoalOf(a_actor, a_teammate, goal);
+        if (Leap::TryStart(a_actor, ForwardVector(a_actor), hasGoal ? &goal : nullptr, now)) {
+            ++npng::FrameBudget::Get().stats.leapsLaunched;
+            a_entry.escalation = 0;
+            return;
+        }
+    }
+
     // 1b) Doorways are chokepoints, not walls. Never sidestep an NPC out of a
     //     doorway — that pushes them off the only route through and is a likely
     //     cause of "NPCs stuck at doors". Give the door a nudge if it is simply
@@ -637,7 +653,7 @@ void PathingManager::Unstick(RE::Actor* a_actor, ActorEntry& a_entry, bool a_tea
     //    pressing into the player, or anyone held by AI/dialogue in open space,
     //    never qualifies — this is what made NPCs "teleport more than traverse".
     if (settings->enableTeleportFallback &&
-        a_entry.escalation >= settings->teleportEscalation &&
+        a_entry.escalation >= settings->teleportEscalation + (Compat::AssistOnly() ? 2 : 0) &&
         !InCombatNearPlayer(a_actor) &&
         IsGenuinelyWallStuck(a_actor) &&
         TryTeleportBypass(a_actor)) {
@@ -835,43 +851,12 @@ bool PathingManager::TryEvgHop(RE::Actor* a_actor, RE::TESObjectREFR* a_marker,
     }
     }
 
-    if (!found || !LandingIsClear(a_actor, landing.z, landing.x, landing.y)) {
+    if (!found || !Raycast::LandingIsClear(a_actor, landing.z, landing.x, landing.y)) {
         return false;
     }
 
     RE::NiPoint3 dest(landing.x, landing.y, landing.z + 2.0f);
     a_actor->SetPosition(dest, true);
-    return true;
-}
-
-bool PathingManager::LandingIsClear(RE::Actor* a_actor, float a_groundZ, float a_x, float a_y) const
-{
-    constexpr float kBodyRadius = 28.0f;
-    const RE::NiPoint3 up(0.0f, 0.0f, 1.0f);
-
-    // Headroom above the landing spot.
-    if (Raycast::Cast(a_actor, RE::NiPoint3(a_x, a_y, a_groundZ + 10.0f), up, 110.0f).didHit) {
-        return false;
-    }
-
-    // Capsule-width clearance around the landing spot. A clear travel ray
-    // alone is not enough if the endpoint is inside a narrow corner, prop, or
-    // another collision hull.
-    constexpr float kDiagonal = 0.70710678f;
-    constexpr RE::NiPoint3 clearanceDirs[] = {
-        { 1.0f, 0.0f, 0.0f }, { -1.0f, 0.0f, 0.0f },
-        { 0.0f, 1.0f, 0.0f }, { 0.0f, -1.0f, 0.0f },
-        { kDiagonal, kDiagonal, 0.0f }, { -kDiagonal, kDiagonal, 0.0f },
-        { kDiagonal, -kDiagonal, 0.0f }, { -kDiagonal, -kDiagonal, 0.0f }
-    };
-    for (float height : { 25.0f, 70.0f }) {
-        const RE::NiPoint3 center(a_x, a_y, a_groundZ + height);
-        for (const auto& dir : clearanceDirs) {
-            if (Raycast::Cast(a_actor, center, dir, kBodyRadius).didHit) {
-                return false;
-            }
-        }
-    }
     return true;
 }
 
@@ -932,6 +917,8 @@ bool PathingManager::TryParkour(RE::Actor* a_actor, const RE::NiPoint3* a_fwdOve
     if (!NpcParkour::Trigger(a_actor, det)) {
         return false;
     }
+
+    Compat::Claim(a_actor->GetFormID(), 3.0f);  // keep FluidMotionNPC off a body SkyParkour is driving
 
     ParkourJob job;
     job.handle = a_actor->GetHandle();
@@ -1010,7 +997,7 @@ bool PathingManager::TryTeleportBypass(RE::Actor* a_actor)
             // Headroom and capsule-width clearance at the destination. A clear
             // travel ray alone is not enough if the endpoint is inside a narrow
             // corner, prop, or another collision hull.
-            if (!LandingIsClear(a_actor, groundZ, candidate.x, candidate.y)) {
+            if (!Raycast::LandingIsClear(a_actor, groundZ, candidate.x, candidate.y)) {
                 continue;
             }
 
@@ -1044,7 +1031,7 @@ void PathingManager::UpdateParkourJobs(float a_delta)
             remove = true;
         } else {
             bool ongoing = false;
-            actor->GetGraphVariableBool(SkyParkourGraph::VarOngoing, ongoing);
+            actor->GetGraphVariableBool(SkyParkourGraph::VarOngoing(), ongoing);
 
             // Ragdoll interrupts everything; the graph resets itself.
             const bool ragdolled =
@@ -1148,16 +1135,83 @@ void PathingManager::CleanupEntries()
     }
 }
 
+bool PathingManager::OutOfBudget() const
+{
+    return npng::FrameBudget::Get().Exhausted();
+}
+
+bool PathingManager::GoalOf(RE::Actor* a_actor, bool a_teammate, RE::NiPoint3& a_out) const
+{
+    if (auto target = a_actor->GetActorRuntimeData().currentCombatTarget.get(); target && !target->IsDead()) {
+        a_out = target->GetPosition();
+        return true;
+    }
+    if (a_teammate) {
+        if (auto* player = RE::PlayerCharacter::GetSingleton()) {
+            a_out = player->GetPosition();
+            return true;
+        }
+    }
+    return false;
+}
+
+void PathingManager::DrainPending()
+{
+    // At most two heavy attempts a frame, and none once the budget is spent. A queued NPC that
+    // has to wait costs nothing but latency; it is retried on the next frame.
+    constexpr std::uint32_t kMaxHeavyPerFrame = 2;
+    auto& budget = npng::FrameBudget::Get();
+
+    while (!pending.empty()) {
+        if (heavyThisFrame >= kMaxHeavyPerFrame || budget.Exhausted()) {
+            ++budget.stats.heavyDeferred;
+            return;
+        }
+        const PendingUnstick job = pending.front();
+        pending.pop_front();
+
+        auto actorPtr = job.handle.get();
+        if (!actorPtr) {
+            continue;
+        }
+        RE::Actor* actor = actorPtr.get();
+        auto it = entries.find(actor->GetFormID());
+        if (it == entries.end()) {
+            continue;
+        }
+        it->second.queued = false;
+        if (!actor->Is3DLoaded() || actor->IsDead() || !PassesDynamicFilter(actor)) {
+            continue;
+        }
+        ++heavyThisFrame;
+        ++budget.stats.heavyRuns;
+        Unstick(actor, it->second, job.teammate);
+    }
+}
+
 void PathingManager::OnFrame(float a_delta)
 {
     auto* settings = Settings::GetSingleton();
-    settings->Refresh();  // MCM globals -> members; no-op without the ESP
+    auto& budget = npng::FrameBudget::Get();
+    budget.Begin();
+    heavyThisFrame = 0;
     now += a_delta;
+
+    // MCM globals -> members a few times a second; the values change only when the user
+    // touches the MCM, so a per-frame copy of ~20 globals was pure overhead. No-op without the ESP.
+    settingsAccum += a_delta;
+    if (settingsAccum >= 0.25) {
+        settingsAccum = 0.0;
+        settings->Refresh();
+        budget.SetLimitMs(settings->frameBudgetMs);
+    }
 
     if (!settings->enabled) {
         // Disabling during a climb must restore controller simulation and graph state.
         if (wasEnabled) {
             CancelParkourJobs(true);
+            Leap::CancelAll();
+            pending.clear();
             entries.clear();
             playerEvents.clear();
             playerWasParkouring = false;
@@ -1179,6 +1233,12 @@ void PathingManager::OnFrame(float a_delta)
         return;
     }
 
+    Compat::BeginFrame();
+    {
+        auto* ui = RE::UI::GetSingleton();
+        dialogueMenuOpen = ui && ui->IsMenuOpen(RE::DialogueMenu::MENU_NAME);
+    }
+
     // Re-arm EVG marker scanning when the player travels into a new cell.
     if (settings->enableEvgTraversal) {
         EvgTraversal::UpdatePlayerCell(player->GetParentCell());
@@ -1193,9 +1253,12 @@ void PathingManager::OnFrame(float a_delta)
         playerLastFurnBase = 0;
     }
 
-    // Actors mid-parkour need attention every frame.
+    // Actors mid-parkour or mid-leap need attention every frame.
     if (!jobs.empty()) {
         UpdateParkourJobs(a_delta);
+    }
+    if (Leap::ActiveCount() > 0) {
+        Leap::Update(a_delta, now);
     }
 
     auto* processLists = RE::ProcessLists::GetSingleton();
@@ -1211,33 +1274,65 @@ void PathingManager::OnFrame(float a_delta)
     // Round-robin detection slice. Snapshot the handles first: our unstick
     // actions (teleport, activate, anim events) can make the engine grow the
     // handle array mid-loop, which would leave us iterating freed memory.
-    const std::uint32_t slice = std::min<std::uint32_t>(settings->actorsPerFrame, count);
-    RE::ActorHandle sliceHandles[100];
-    for (std::uint32_t i = 0; i < slice; i++) {
-        sliceHandles[i] = handles[rrIndex % count];
-        rrIndex++;
+    // Far actors are skipped without costing a slot of the slice, so a big loaded area
+    // does not starve the NPCs next to the player.
+    constexpr std::uint32_t kMaxExamined = 100;
+    const std::uint32_t wanted = std::min<std::uint32_t>(settings->actorsPerFrame, kMaxExamined);
+    const std::uint32_t examine = std::min(count, kMaxExamined);
+    RE::ActorHandle sliceHandles[kMaxExamined];
+    for (std::uint32_t i = 0; i < examine; i++) {
+        sliceHandles[i] = handles[(rrIndex + i) % count];
     }
-    for (std::uint32_t i = 0; i < slice; i++) {
-        auto actorPtr = sliceHandles[i].get();
+    const RE::NiPoint3 playerPos = player->GetPosition();
+    const float radius2 = settings->processRadius * settings->processRadius;
+    std::uint32_t processed = 0;
+    std::uint32_t examined = 0;
+    for (; examined < examine && processed < wanted; examined++) {
+        auto actorPtr = sliceHandles[examined].get();
         if (!actorPtr || !actorPtr->Is3DLoaded()) {
             continue;
         }
         RE::Actor* actor = actorPtr.get();
 
+        // Nothing a far-away high-process actor does is visible: not worth a single call.
+        if (radius2 > 0.0f) {
+            const RE::NiPoint3 d = actor->GetPosition() - playerPos;
+            if (d.x * d.x + d.y * d.y + d.z * d.z > radius2) {
+                continue;
+            }
+        }
+
         auto& entry = entries[actor->GetFormID()];
         entry.lastSeenTime = now;
         ProcessDetection(actor, entry);
+        ++processed;
     }
+    rrIndex = (rrIndex + examined) % count;
+
+    DrainPending();
 
     if (now - lastCleanup > 10.0) {
         lastCleanup = now;
         CleanupEntries();
+    }
+
+    budget.End();
+    npng::FrameBudget::Stats report;
+    if (budget.TakeReport(report, now) && (settings->debugLogging || report.heavyRuns || report.leapsLaunched)) {
+        logger::info(
+            "NPCPathingNG perf/min: frames={} avg={:.3f}ms max={:.2f}ms rays={} heavy={} deferred={} leaps={} "
+            "yielded={} queue={} budget={:.2f}ms",
+            report.frames, report.totalMs / static_cast<double>(report.frames), report.maxMs, report.rays,
+            report.heavyRuns, report.heavyDeferred, report.leapsLaunched, report.yielded, pending.size(),
+            budget.LimitMs());
     }
 }
 
 void PathingManager::Reset()
 {
     CancelParkourJobs(false);
+    Leap::CancelAll();
+    pending.clear();
     entries.clear();
     playerEvents.clear();
     playerWasParkouring = false;

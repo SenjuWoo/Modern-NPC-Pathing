@@ -1,16 +1,11 @@
+#include "compat.h"
 #include "evg_traversal.h"
+#include "hooks.h"
 #include "pathing.h"
 #include "settings.h"
 #include "version.h"
 
-#include "SKSE/SKSE.h"
-
-#include "RE/B/BSTEvent.h"
-#include "RE/M/MenuOpenCloseEvent.h"
-#include "RE/U/UI.h"
-
 #include <spdlog/sinks/basic_file_sink.h>
-#include <spdlog/spdlog.h>
 
 namespace
 {
@@ -20,16 +15,16 @@ namespace
         if (!logPath) {
             return;
         }
-        auto logFile = logPath.value() / "NPCPathingNG.log";
+        auto logFile = *logPath / "NPCPathingNG.log";
         auto logger = spdlog::basic_logger_mt("NPCPathingNG", logFile.string(), true);
         logger->set_level(spdlog::level::info);
         logger->flush_on(spdlog::level::info);
         spdlog::set_default_logger(std::move(logger));
     }
 
-    // Re-read the fallback INI whenever the journal/system menu closes, so
-    // non-MCM users can tweak settings without restarting. MCM users don't
-    // need this — their changes flow through the ESP globals instantly.
+    // Re-read the INI whenever the journal/system menu closes, so non-MCM users can tweak
+    // settings without restarting, and re-read Fluid Motion's INI (it re-reads on game load).
+    // MCM users don't need this — their changes flow through the ESP globals.
     class MenuListener : public RE::BSTEventSink<RE::MenuOpenCloseEvent>
     {
     public:
@@ -49,27 +44,36 @@ namespace
         RE::BSEventNotifyControl ProcessEvent(const RE::MenuOpenCloseEvent* a_event,
                                               RE::BSTEventSource<RE::MenuOpenCloseEvent>*) override
         {
-            if (a_event && !a_event->opening && a_event->menuName == "Journal Menu") {
+            if (a_event && !a_event->opening && a_event->menuName == RE::JournalMenu::MENU_NAME) {
                 Settings::GetSingleton()->Load();
+                Compat::Reload();
             }
             return RE::BSEventNotifyControl::kContinue;
         }
     };
 
-    void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
+    void OnMessage(SKSE::MessagingInterface::Message* a_msg)
     {
         switch (a_msg->type) {
+        case SKSE::MessagingInterface::kPostLoad:
+            // Every plugin DLL is loaded now, whatever its load order: look for the others.
+            Compat::Detect();
+            break;
         case SKSE::MessagingInterface::kDataLoaded:
-            // Forms exist now — safe to cache keywords, bind MCM globals,
-            // and install the frame hook.
+            // Forms exist now — safe to cache keywords, bind MCM globals, install the frame hook.
             Settings::GetSingleton()->Load();
             Settings::GetSingleton()->BindGlobals();
-            // kDataLoaded runs before any save is deserialized, so this makes the
-            // INI / FOMOD preset the starting MCM state on a new game or fresh
-            // install without clobbering an existing save's saved settings.
+            // kDataLoaded runs before any save is deserialized, so this makes the INI the
+            // starting MCM state on a new game or fresh install without clobbering an
+            // existing save's saved settings.
             Settings::GetSingleton()->PushToGlobals();
+            Compat::Reload();
+            logger::info("compat: {}", Compat::Summary());
             EvgTraversal::CacheForms();
             PathingManager::Install();
+            if (!Hooks::InstallFrameHook()) {
+                logger::error("NPCPathingNG is inactive: the frame hook could not be installed safely");
+            }
             MenuListener::Register();
             break;
         case SKSE::MessagingInterface::kPreLoadGame:
@@ -79,49 +83,44 @@ namespace
             // latch is a per-cell heuristic, not a permanent verdict.
             EvgTraversal::ResetRouteState();
             break;
+        case SKSE::MessagingInterface::kPostLoadGame:
+            // Fluid Motion re-reads its INI on every load; so do we.
+            Compat::Reload();
+            break;
         default:
             break;
         }
     }
 }
 
-// AE (1.6.340+) loads plugins via this export. Version-independent through Address Library.
-extern "C" __declspec(dllexport) constinit auto SKSEPlugin_Version = []() noexcept {
-    SKSE::PluginVersionData v;
-    v.PluginName("NPCPathingNG");
-    v.PluginVersion(REL::Version{ PluginVersion::Major, PluginVersion::Minor, PluginVersion::Patch });
-    // Public author name only — never the local Windows account name, which
-    // ends up as a plain string inside the shipped DLL.
-    v.AuthorName("GennyWoo");
-    v.UsesAddressLibrary(true);
-    v.UsesStructsPost629(true);
-    return v;
-}();
+// One DLL for SE 1.5.97, AE 1.6.x / 1.7.x (and VR, which loads inactive-safe):
+// Address Library V5 flag + struct independence. SKSE 2.3+ rejects an Address Library plugin
+// without the V5 flag unless the PE stamp is recent (the build uses /Brepro).
+SKSEPluginInfo(
+    .Version = REL::Version{ PluginVersion::Major, PluginVersion::Minor, PluginVersion::Patch, 0 },
+    .Name = "NPCPathingNG"sv,
+    .Author = "GennyWoo"sv,  // public author name only — never the local Windows account name
+    .StructCompatibility = SKSE::StructCompatibility::Independent,
+    .RuntimeCompatibility = SKSE::VersionIndependence::AddressLibrary)
 
-// SE (1.5.97) loads plugins via Query/Load.
-extern "C" __declspec(dllexport) bool SKSEPlugin_Query(const SKSE::QueryInterface*, SKSE::PluginInfo* a_info)
+SKSE_PLUGIN_LOAD(const SKSE::LoadInterface* a_skse)
 {
-    a_info->infoVersion = SKSE::PluginInfo::kVersion;
-    a_info->name = "NPCPathingNG";
-    a_info->version = PluginVersion::Legacy;
-    return true;
-}
-
-extern "C" __declspec(dllexport) bool SKSEPlugin_Load(const SKSE::LoadInterface* a_skse)
-{
+    if (!a_skse || a_skse->IsEditor()) {
+        return false;
+    }
     SKSE::Init(a_skse);
     InitializeLogging();
 
-    spdlog::info("NPCPathingNG v{} loading (runtime {})", PluginVersion::String,
+    logger::info("NPCPathingNG v{} loading (runtime {})", PluginVersion::String,
                  REL::Module::get().version().string());
 
-    if (auto* messaging = SKSE::GetMessagingInterface()) {
-        messaging->RegisterListener(MessageHandler);
-    } else {
-        spdlog::error("NPCPathingNG: no messaging interface");
+    auto* messaging = SKSE::GetMessagingInterface();
+    if (!messaging) {
+        logger::error("NPCPathingNG: no messaging interface");
         return false;
     }
+    messaging->RegisterListener(OnMessage);
 
-    spdlog::info("NPCPathingNG loaded");
+    logger::info("NPCPathingNG loaded");
     return true;
 }
