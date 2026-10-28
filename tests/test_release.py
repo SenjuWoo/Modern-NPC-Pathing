@@ -185,7 +185,8 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("Compat::ExternalTraversing", leap)
         # Compat is resolved after every plugin has loaded, whatever the load order.
         main = read_text(ROOT / "src/main.cpp")
-        self.assertRegex(main, r"kPostLoad:\s*//[^\n]*\n\s*(//[^\n]*\n\s*)*Compat::Detect\(\)")
+        post_load = main.split("case SKSE::MessagingInterface::kPostLoad:", 1)[1].split("case SKSE::MessagingInterface::", 1)[0]
+        self.assertIn("Compat::Detect()", post_load)
 
     def test_hooks_use_runtime_relocation_and_ownership_check(self) -> None:
         hooks = read_text(ROOT / "src/hooks.cpp")

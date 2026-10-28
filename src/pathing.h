@@ -69,9 +69,9 @@ public:
         return &instance;
     }
 
-    /// Cache keywords. The per-frame tick itself is installed by Hooks::InstallFrameHook.
+    /// Cache the actor-type keywords. The per-frame tick is installed by Hooks::InstallFrameHook.
     /// Call once, at SKSE kDataLoaded.
-    static void Install();
+    void CacheKeywords();
 
     /// Main-thread frame tick.
     void OnFrame(float a_delta);
@@ -82,7 +82,6 @@ public:
 private:
     PathingManager() = default;
 
-    void CacheKeywords();
     bool PassesStaticFilter(RE::Actor* a_actor) const;
     bool PassesDynamicFilter(RE::Actor* a_actor) const;
     bool IsTeammate(RE::Actor* a_actor) const;

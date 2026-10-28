@@ -62,12 +62,6 @@ namespace
     constexpr float kPostureEpsilon = 0.02f;      // radians (~1.1 deg)
 }
 
-void PathingManager::Install()
-{
-    auto* mgr = GetSingleton();
-    mgr->CacheKeywords();
-}
-
 void PathingManager::CacheKeywords()
 {
     if (keywordsReady) {

@@ -70,7 +70,7 @@ namespace
             Compat::Reload();
             logger::info("compat: {}", Compat::Summary());
             EvgTraversal::CacheForms();
-            PathingManager::Install();
+            PathingManager::GetSingleton()->CacheKeywords();
             if (!Hooks::InstallFrameHook()) {
                 logger::error("NPCPathingNG is inactive: the frame hook could not be installed safely");
             }
