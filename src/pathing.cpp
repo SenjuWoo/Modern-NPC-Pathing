@@ -626,7 +626,7 @@ void PathingManager::Unstick(RE::Actor* a_actor, ActorEntry& a_entry, bool a_tea
 
     // 1a) Own ballistic hurdle / vault / drop, for users with no SkyParkour and no other
     //     jump mod. Off automatically when Fluid Motion or NpcTraversalNG owns jumps.
-    if (settings->enableLeap && !Compat::JumpsOwnedByOther()) {
+    if (settings->enableLeap && !Compat::JumpsOwnedByOther() && !InCombatNearPlayer(a_actor)) {
         RE::NiPoint3 goal;
         const bool hasGoal = GoalOf(a_actor, a_teammate, goal);
         if (Leap::TryStart(a_actor, ForwardVector(a_actor), hasGoal ? &goal : nullptr, now)) {

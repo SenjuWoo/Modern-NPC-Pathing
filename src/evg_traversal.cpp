@@ -66,6 +66,12 @@ namespace
 
     const std::vector<RE::ObjectRefHandle>& MarkersIn(const RE::TESObjectCELL* a_cell)
     {
+        // A cell that is not attached yet may not list its references: answer "none" for now
+        // without caching, so the next query enumerates it for real.
+        static const std::vector<RE::ObjectRefHandle> kNone;
+        if (!a_cell->IsAttached()) {
+            return kNone;
+        }
         auto [it, inserted] = g_cellMarkers.try_emplace(a_cell->GetFormID());
         if (inserted) {
             a_cell->ForEachReference([&](RE::TESObjectREFR* a_ref) {

@@ -50,6 +50,19 @@ namespace Hooks
             // A failure in our tick turns the plugin off for the session instead of taking the game down.
             static inline bool faulted = false;
 
+            // Stop for the session, but first hand back every NPC mid-parkour or mid-leap
+            // (controller simulation, in-air state), since nothing will tick them again.
+            static void Fault(const char* a_what)
+            {
+                faulted = true;
+                logger::critical("NPCPathingNG stopped for this session: {}", a_what);
+                try {
+                    PathingManager::GetSingleton()->Reset();
+                } catch (...) {
+                    logger::critical("NPCPathingNG: releasing driven NPCs after the fault also failed");
+                }
+            }
+
             static void Thunk(RE::PlayerCharacter* a_this, float a_delta)
             {
                 original(a_this, a_delta);
@@ -59,11 +72,9 @@ namespace Hooks
                 try {
                     PathingManager::GetSingleton()->OnFrame(a_delta);
                 } catch (const std::exception& e) {
-                    faulted = true;
-                    logger::critical("NPCPathingNG stopped for this session: {}", e.what());
+                    Fault(e.what());
                 } catch (...) {
-                    faulted = true;
-                    logger::critical("NPCPathingNG stopped for this session: unknown exception");
+                    Fault("unknown exception");
                 }
             }
         };
