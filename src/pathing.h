@@ -20,8 +20,19 @@ struct ActorEntry
     double       lastTraversalEnd = -100.0;  // parkour job finished — posture-guard window
     int          stuckCount = 0;
     int          escalation = 0;        // consecutive stuck triggers with no parkour/EVG escape
+    double       lastAirTime = -100.0;  // last sample with the controller off the ground (other mods' jumps)
+    double       nextReplayTry = 0.0;   // follower replay is throttled: each try is a full ledge sweep
     bool         filterChecked = false;
     bool         passesFilter = false;
+    bool         queued = false;        // waiting in the heavy-work queue
+};
+
+/// A stuck NPC waiting for the expensive unstick attempt (ledge sweeps, leap planning).
+/// Detection is cheap and runs every frame; these run a couple per frame within the time budget.
+struct PendingUnstick
+{
+    RE::ActorHandle handle;
+    bool            teammate = false;
 };
 
 /// One NPC currently being pushed through a SkyParkour animation.
@@ -58,9 +69,9 @@ public:
         return &instance;
     }
 
-    /// Install the per-frame tick (PlayerCharacter::Update vfunc hook) and cache keywords.
+    /// Cache the actor-type keywords. The per-frame tick is installed by Hooks::InstallFrameHook.
     /// Call once, at SKSE kDataLoaded.
-    static void Install();
+    void CacheKeywords();
 
     /// Main-thread frame tick.
     void OnFrame(float a_delta);
@@ -71,7 +82,6 @@ public:
 private:
     PathingManager() = default;
 
-    void CacheKeywords();
     bool PassesStaticFilter(RE::Actor* a_actor) const;
     bool PassesDynamicFilter(RE::Actor* a_actor) const;
     bool IsTeammate(RE::Actor* a_actor) const;
@@ -96,15 +106,18 @@ private:
     /// marker's kind (Across/Up/Down) and furniture bounds, ground-snapped and
     /// capsule-cleared. Positional only — no animation, no sound.
     bool TryEvgHop(RE::Actor* a_actor, RE::TESObjectREFR* a_marker, const RE::NiPoint3& a_markerFwd);
-    /// Headroom + body-radius clearance at a landing point (shared by the
-    /// teleport bypass and the EVG hop).
-    bool LandingIsClear(RE::Actor* a_actor, float a_groundZ, float a_x, float a_y) const;
     bool TryParkour(RE::Actor* a_actor, const RE::NiPoint3* a_fwdOverride = nullptr);
     /// SkyParkour SFX are 2D (SOMStereo). Refuse parkour when the actor is
     /// farther than Settings::parkourMaxPlayerDistance. 0 = no limit.
     bool WithinParkourRange(RE::Actor* a_actor) const;
     bool TryTeleportBypass(RE::Actor* a_actor);
     void UpdateParkourJobs(float a_delta);
+    /// Run queued unstick attempts until the frame budget or the per-frame cap is reached.
+    void DrainPending();
+    /// Where this NPC is trying to get to: its combat target, or the player for a follower.
+    bool GoalOf(RE::Actor* a_actor, bool a_teammate, RE::NiPoint3& a_out) const;
+    /// True if the frame budget is spent (heavy probes wait for the next frame).
+    bool OutOfBudget() const;
     void CancelParkourJobs(bool a_sendInterrupt);
     void CleanupEntries();
 
@@ -121,8 +134,12 @@ private:
     std::unordered_map<RE::FormID, ActorEntry> entries;
     std::vector<ParkourJob>                    jobs;
     std::deque<PlayerParkourEvent>             playerEvents;
+    std::deque<PendingUnstick>                 pending;
 
     double        now = 0.0;
+    double        settingsAccum = 0.0;  // MCM globals are re-read a few times a second, not per frame
+    std::uint32_t heavyThisFrame = 0;
+    bool          dialogueMenuOpen = false;  // refreshed once per frame
     double        lastCleanup = 0.0;
     std::uint32_t rrIndex = 0;
     bool          playerWasParkouring = false;

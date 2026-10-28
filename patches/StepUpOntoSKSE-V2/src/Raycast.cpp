@@ -26,7 +26,7 @@ namespace StepUp::Raycast
 
 			const float scale = GetWorldScale();
 			RE::hkpWorldRayCastInput input{};
-			input.filterInfo = a_filterInfo;
+			input.filterInfo.filter = a_filterInfo;
 			input.from = RE::hkVector4(a_from.x * scale, a_from.y * scale, a_from.z * scale, 0.f);
 			input.to   = RE::hkVector4(a_to.x   * scale, a_to.y   * scale, a_to.z   * scale, 0.f);
 
@@ -88,7 +88,7 @@ namespace StepUp::Raycast
 		}
 		const auto* entity = static_cast<RE::hkpEntity*>(rb->referencedObject.get());
 		const std::uint16_t group =
-			static_cast<std::uint16_t>(entity->collidable.broadPhaseHandle.collisionFilterInfo >> 16);
+			static_cast<std::uint16_t>(entity->collidable.broadPhaseHandle.collisionFilterInfo.filter >> 16);
 
 		s_filter = (static_cast<std::uint32_t>(group) << 16) | 0x28u;
 		return s_filter;

@@ -3,19 +3,38 @@
   "configurePresets": [
     {
       "name": "windows-msvc",
-      "displayName": "Windows MSVC 2022 x64",
-      "generator": "Visual Studio 17 2022",
+      "displayName": "Windows MSVC x64 (VS 2022 or 2026)",
+      "generator": "Visual Studio 18 2026",
       "architecture": "x64",
-      "binaryDir": "${sourceDir}/build"
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static",
+        "VCPKG_HOST_TRIPLET": "x64-windows-static",
+        "VCPKG_INSTALLED_DIR": "${sourceDir}/vcpkg_installed"
+      }
+    },
+    {
+      "name": "windows-msvc-2022",
+      "displayName": "Windows MSVC 2022 x64",
+      "inherits": "windows-msvc",
+      "generator": "Visual Studio 17 2022"
     }
   ],
   "buildPresets": [
     {
       "name": "windows-msvc-release",
-      "displayName": "Windows MSVC 2022 Release",
+      "displayName": "Release",
       "configurePreset": "windows-msvc",
-      "configuration": "Release",
-      "jobs": 2
+      "configuration": "RelWithDebInfo",
+      "jobs": 4
+    },
+    {
+      "name": "windows-msvc-2022-release",
+      "displayName": "Release (VS 2022)",
+      "configurePreset": "windows-msvc-2022",
+      "configuration": "RelWithDebInfo",
+      "jobs": 4
     }
   ]
 }

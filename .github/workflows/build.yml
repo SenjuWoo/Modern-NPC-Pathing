@@ -14,7 +14,10 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 90
     env:
-      COMMONLIB_COMMIT: b93280e832f263dbef44e44cbe2936622a02f91a
+      # Keep in step with BUILDING.md and build_release.ps1 (tests/test_release.py checks it).
+      COMMONLIB_TAG: v14.1.0
+      # Same baseline as vcpkg.json "builtin-baseline".
+      VCPKG_BASELINE: 9126c6f1ff834e12372c5711ff3bdbca1921541c
 
     steps:
       - name: Check out source
@@ -36,86 +39,44 @@ jobs:
             throw "Could not locate vcpkg toolchain at $toolchain"
           }
           "VCPKG_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          # The manifest pins a baseline commit; make sure the runner's vcpkg has it.
+          git -C $root fetch --quiet origin $env:VCPKG_BASELINE
 
-      - name: Select CMake generator
+      - name: Select CMake preset
         shell: pwsh
         run: |
-          # windows-latest (windows-2025 image) ships Visual Studio 2026 only;
-          # older images ship Visual Studio 2022. Detect what is installed and
-          # what this CMake supports instead of hardcoding a generator.
-          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          $vsVersion = ""
-          if (Test-Path $vswhere) {
-            $vsVersion = (& $vswhere -latest -products * -property installationVersion)
-          }
+          # windows-latest ships Visual Studio 2026; older images ship 2022. Pick by what this
+          # CMake can generate rather than hardcoding one.
           $help = (& cmake --help | Out-String)
-          $generator = $null
-          if ($vsVersion -like "18.*" -and $help -match "Visual Studio 18 2026") {
-            $generator = "Visual Studio 18 2026"
-          } elseif ($vsVersion -like "17.*" -and $help -match "Visual Studio 17 2022") {
-            $generator = "Visual Studio 17 2022"
-          } elseif ($help -match "Visual Studio 18 2026") {
-            $generator = "Visual Studio 18 2026"
-          } elseif ($help -match "Visual Studio 17 2022") {
-            $generator = "Visual Studio 17 2022"
-          }
-          if (-not $generator) {
-            throw "No supported Visual Studio CMake generator found (installed VS: $vsVersion)."
-          }
-          Write-Host "Using CMake generator: $generator (installed VS: $vsVersion)"
-          "CMAKE_GENERATOR_NAME=$generator" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          if ($help -match "Visual Studio 18 2026") { $preset = "windows-msvc" }
+          elseif ($help -match "Visual Studio 17 2022") { $preset = "windows-msvc-2022" }
+          else { throw "No supported Visual Studio CMake generator found." }
+          Write-Host "Using preset $preset"
+          "CMAKE_PRESET=$preset" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Validate generated assets
+      - name: Validate generated assets and run release tests
         shell: pwsh
         run: |
           python generate_esp.py
           git diff --exit-code -- package/Data/NPCPathingNG.esp package/Data/Seq/NPCPathingNG.seq
           python -m unittest discover -s tests -v
 
+      - name: Game-independent unit tests
+        shell: cmd
+        run: tools\run_unit_tests.bat
+
       - name: Fetch pinned CommonLibSSE-NG
         shell: pwsh
         run: |
-          git clone --filter=blob:none https://github.com/CharmedBaryon/CommonLibSSE-NG.git extern/CommonLibSSE
-          git -C extern/CommonLibSSE checkout $env:COMMONLIB_COMMIT
+          git clone --filter=blob:none https://github.com/alandtse/CommonLibSSE-NG.git extern/CommonLibSSE
+          git -C extern/CommonLibSSE checkout $env:COMMONLIB_TAG
+          git -C extern/CommonLibSSE submodule update --init --depth 1
 
-      - name: Build and install CommonLibSSE-NG
+      - name: Build NPC Pathing NG and the StepUpOnto patch
         shell: pwsh
         run: |
-          cmake -S extern/CommonLibSSE -B extern/CommonLibSSE/build `
-            -G "$env:CMAKE_GENERATOR_NAME" -A x64 `
-            -DBUILD_TESTS=OFF `
-            -DENABLE_SKYRIM_VR=OFF `
-            -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded `
-            -DCMAKE_INSTALL_PREFIX="$PWD/extern/CommonLibSSE/install" `
-            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
-            -DVCPKG_TARGET_TRIPLET=x64-windows-static `
-            -DVCPKG_HOST_TRIPLET=x64-windows-static
-          cmake --build extern/CommonLibSSE/build --config Release --target install --parallel 2
-
-          # The generated CommonLibSSEConfig.cmake includes CommonLibSSE.cmake
-          # unconditionally, but this pinned commit does not always install that
-          # helper module. Supply it from the source tree when it is absent,
-          # then fail loudly rather than letting the plugin configure step die
-          # with a confusing "include could not find requested file".
-          $dst = Join-Path $PWD "extern/CommonLibSSE/install/lib/cmake/CommonLibSSE"
-          $helper = Join-Path $PWD "extern/CommonLibSSE/cmake/CommonLibSSE.cmake"
-          if ((Test-Path $helper) -and -not (Test-Path (Join-Path $dst "CommonLibSSE.cmake"))) {
-            Write-Host "Installing missing helper module CommonLibSSE.cmake"
-            Copy-Item $helper (Join-Path $dst "CommonLibSSE.cmake")
-          }
-          Write-Host "CommonLibSSE install contents:"
-          Get-ChildItem $dst -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.Name)" }
-          foreach ($f in @("CommonLibSSEConfig.cmake", "CommonLibSSE-targets.cmake", "CommonLibSSE.cmake")) {
-            if (-not (Test-Path (Join-Path $dst $f))) {
-              throw "CommonLibSSE install incomplete: missing $f"
-            }
-          }
-
-      - name: Build NPC Pathing NG
-        shell: pwsh
-        run: |
-          cmake -S . -B build -G "$env:CMAKE_GENERATOR_NAME" -A x64
-          cmake --build build --config Release --parallel 2
+          cmake --preset $env:CMAKE_PRESET
+          cmake --build build --config RelWithDebInfo --target NPCPathingNG StepUpOntoSKSE --parallel 2
 
       - name: Verify the plugin actually built
         shell: pwsh
@@ -129,18 +90,17 @@ jobs:
           Write-Host "Built NPCPathingNG.dll embedding version $version"
           "MOD_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Build release archives
+      - name: Package the FOMOD
         shell: pwsh
         run: |
           python -m unittest discover -s tests -v
-          python tools/package_release.py
           python tools/package_fomod.py
 
       # Version is read from src/version.h so this never needs editing per release.
       - name: Upload Nexus-ready release
         uses: actions/upload-artifact@v7
         with:
-          name: NPC-Pathing-NG-${{ env.MOD_VERSION }}-Nexus
+          name: NPC-Pathing-NG-${{ env.MOD_VERSION }}-FOMOD
           path: |
             dist/*.zip
             dist/SHA256SUMS.txt

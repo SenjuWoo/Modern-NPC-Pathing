@@ -344,7 +344,7 @@ namespace NpcParkour
             return false;
         }
         bool installed = false;
-        a_actor->GetGraphVariableBool(SkyParkourGraph::VarTPPInstalled, installed);
+        a_actor->GetGraphVariableBool(SkyParkourGraph::VarTPPInstalled(), installed);
         return installed;
     }
 
@@ -390,21 +390,21 @@ namespace NpcParkour
             return false;
         }
 
-        a_actor->SetGraphVariableInt(SkyParkourGraph::VarLedge, static_cast<std::int32_t>(a_det.type));
+        a_actor->SetGraphVariableInt(SkyParkourGraph::VarLedge(), static_cast<std::int32_t>(a_det.type));
 
         const bool isStep = a_det.type == NpcParkourType::StepLow ||
                             a_det.type == NpcParkourType::StepHigh;
         const bool lowerBody = isStep && a_actor->AsActorState()->IsWeaponDrawn();
         // Always write this variable. Otherwise a weapon-drawn step can leak its
         // lower-body-only mode into the actor's next full-body climb.
-        a_actor->SetGraphVariableBool(SkyParkourGraph::VarLowerBody, lowerBody);
+        a_actor->SetGraphVariableBool(SkyParkourGraph::VarLowerBody(), lowerBody);
 
-        const bool accepted = a_actor->NotifyAnimationGraph(SkyParkourGraph::NotifyStart);
+        const bool accepted = a_actor->NotifyAnimationGraph(SkyParkourGraph::NotifyStart());
         if (!accepted) {
             // Graph rejected the transition — leave no stale state behind.
-            a_actor->SetGraphVariableInt(SkyParkourGraph::VarLedge,
+            a_actor->SetGraphVariableInt(SkyParkourGraph::VarLedge(),
                                          static_cast<std::int32_t>(NpcParkourType::NoLedge));
-            a_actor->SetGraphVariableBool(SkyParkourGraph::VarLowerBody, false);
+            a_actor->SetGraphVariableBool(SkyParkourGraph::VarLowerBody(), false);
         }
         return accepted;
     }
@@ -447,13 +447,13 @@ namespace NpcParkour
         a_actor->data.angle.x = 0.0f;
         a_actor->data.angle.y = 0.0f;
 
-        a_actor->SetGraphVariableInt(SkyParkourGraph::VarLedge,
+        a_actor->SetGraphVariableInt(SkyParkourGraph::VarLedge(),
                                      static_cast<std::int32_t>(NpcParkourType::NoLedge));
-        a_actor->SetGraphVariableBool(SkyParkourGraph::VarLowerBody, false);
+        a_actor->SetGraphVariableBool(SkyParkourGraph::VarLowerBody(), false);
 
         if (a_sendInterrupt) {
             // Never send SkyParkour_Stop from outside the graph — SkyParkour warns it recurses.
-            a_actor->NotifyAnimationGraph(SkyParkourGraph::EvInterrupt);
+            a_actor->NotifyAnimationGraph(SkyParkourGraph::EvInterrupt());
         }
     }
 }

@@ -1,1 +1,1 @@
-NPC Pathing NG 2.5.0
+NPC Pathing NG 3.0.0

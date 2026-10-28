@@ -1,17 +1,17 @@
 [CmdletBinding()]
 param(
-    [string]$Generator = "",
-    [string]$CommonLibCommit = "b93280e832f263dbef44e44cbe2936622a02f91a"
+    [string]$Preset = "",
+    [string]$CommonLibTag = "v14.1.0"
 )
 
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
-function Resolve-CMakeGenerator {
-    if ($Generator) { return $Generator }
+function Resolve-Preset {
+    if ($Preset) { return $Preset }
     $help = (& cmake --help | Out-String)
-    if ($help -match "Visual Studio 18 2026") { return "Visual Studio 18 2026" }
-    if ($help -match "Visual Studio 17 2022") { return "Visual Studio 17 2022" }
+    if ($help -match "Visual Studio 18 2026") { return "windows-msvc" }
+    if ($help -match "Visual Studio 17 2022") { return "windows-msvc-2022" }
     throw "Visual Studio 2022 or 2026 C++ build tools were not found."
 }
 
@@ -22,37 +22,34 @@ if (-not $vcpkgRoot -or -not (Test-Path "$vcpkgRoot/scripts/buildsystems/vcpkg.c
 }
 $env:VCPKG_ROOT = $vcpkgRoot
 
-$cmakeGenerator = Resolve-CMakeGenerator
-Write-Host "Using $cmakeGenerator"
+$cmakePreset = Resolve-Preset
+Write-Host "Using preset $cmakePreset"
 
 python generate_esp.py
 python -m unittest discover -s tests -v
+if ($LASTEXITCODE -ne 0) { throw "release tests failed" }
 
 $commonLib = Join-Path $PSScriptRoot "extern/CommonLibSSE"
 if (-not (Test-Path (Join-Path $commonLib "CMakeLists.txt"))) {
-    git clone https://github.com/CharmedBaryon/CommonLibSSE-NG.git $commonLib
+    git clone https://github.com/alandtse/CommonLibSSE-NG.git $commonLib
 }
 if (-not (Test-Path (Join-Path $commonLib ".git"))) {
-    throw "extern/CommonLibSSE exists but is not the pinned Git checkout. Remove it and rerun."
+    throw "extern/CommonLibSSE exists but is not a Git checkout. Remove it and rerun."
 }
-git -C $commonLib fetch --quiet origin $CommonLibCommit
-git -C $commonLib checkout --quiet --detach $CommonLibCommit
+git -C $commonLib fetch --quiet --tags origin
+git -C $commonLib checkout --quiet $CommonLibTag
+git -C $commonLib submodule update --init --depth 1
 
-$commonBuild = Join-Path $commonLib "build"
-$commonInstall = Join-Path $commonLib "install"
-cmake -S $commonLib -B $commonBuild -G $cmakeGenerator -A x64 `
-    -DBUILD_TESTS=OFF `
-    -DENABLE_SKYRIM_VR=OFF `
-    -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded `
-    -DCMAKE_INSTALL_PREFIX="$commonInstall" `
-    -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
-    -DVCPKG_TARGET_TRIPLET=x64-windows-static `
-    -DVCPKG_HOST_TRIPLET=x64-windows-static
-cmake --build $commonBuild --config Release --target install --parallel
+cmake --preset $cmakePreset
+if ($LASTEXITCODE -ne 0) { throw "configure failed" }
+cmake --build build --config RelWithDebInfo --target NPCPathingNG StepUpOntoSKSE --parallel
+if ($LASTEXITCODE -ne 0) { throw "build failed" }
 
-cmake -S . -B build -G $cmakeGenerator -A x64
-cmake --build build --config Release --parallel
-
+cmd /c "tools\run_unit_tests.bat"
+if ($LASTEXITCODE -ne 0) { throw "arc unit tests failed" }
 python -m unittest discover -s tests -v
-python tools/package_release.py
+if ($LASTEXITCODE -ne 0) { throw "release tests failed" }
+
+python tools/package_fomod.py
+if ($LASTEXITCODE -ne 0) { throw "FOMOD packaging failed" }
 Write-Host "Release created in dist/."

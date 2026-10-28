@@ -40,7 +40,7 @@ namespace StepUp
 
 		auto* iface = RE::InterfaceStrings::GetSingleton();
 		if (iface && (ui->IsMenuOpen(iface->dialogueMenu) ||
-		              ui->IsMenuOpen(iface->loadWaitSpinner))) {
+		              ui->IsMenuOpen(iface->GetRuntimeData().loadWaitSpinner))) {
 			return false;
 		}
 
@@ -658,7 +658,7 @@ namespace StepUp
 		// Only step onto static geometry (terrain, architecture).  Actors
 		// have unique non-zero collision groups; terrain uses group 0.
 		if (hitLow.rootCollidable) {
-			const std::uint32_t hitFilter = hitLow.rootCollidable->broadPhaseHandle.collisionFilterInfo;
+			const std::uint32_t hitFilter = hitLow.rootCollidable->broadPhaseHandle.collisionFilterInfo.filter;
 			const std::uint16_t hitGroup  = static_cast<std::uint16_t>(hitFilter >> 16);
 			if (hitGroup != 0) {
 				return;

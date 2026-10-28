@@ -1,155 +1,37 @@
 #include "settings.h"
 
-#include "RE/T/TESDataHandler.h"
-
-#include <spdlog/spdlog.h>
-
-#include <algorithm>
-#include <cctype>
-#include <cstdio>
-#include <fstream>
-#include <string>
-#include <unordered_map>
+#include "ini.h"
 
 namespace
 {
     constexpr const char* INI_PATH = "Data/SKSE/Plugins/NPCPathingNG.ini";
     constexpr const char* PLUGIN_FILE = "NPCPathingNG.esp";
 
-    std::string Trim(const std::string& a_str)
+    Settings::CompatMode ParseCompatMode(const std::string& a_text, Settings::CompatMode a_default)
     {
-        const auto begin = a_str.find_first_not_of(" \t\r\n");
-        if (begin == std::string::npos) {
-            return {};
+        const auto v = Ini::Lower(a_text);
+        if (v == "auto" || v == "0") {
+            return Settings::CompatMode::Auto;
         }
-        const auto end = a_str.find_last_not_of(" \t\r\n");
-        return a_str.substr(begin, end - begin + 1);
-    }
-
-    std::string ToLower(std::string a_str)
-    {
-        std::transform(a_str.begin(), a_str.end(), a_str.begin(),
-                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-        return a_str;
-    }
-
-    // Single-pass INI parse: "section/key" (lowercased) -> value.
-    std::unordered_map<std::string, std::string> ParseINI(const char* a_path)
-    {
-        std::unordered_map<std::string, std::string> values;
-        std::ifstream file(a_path);
-        if (!file.is_open()) {
-            return values;
+        if (v == "force" || v == "1") {
+            return Settings::CompatMode::Force;
         }
-
-        std::string line;
-        std::string section;
-        while (std::getline(file, line)) {
-            line = Trim(line);
-            if (line.empty() || line[0] == ';' || line[0] == '#') {
-                continue;
-            }
-            if (line.front() == '[' && line.back() == ']') {
-                section = ToLower(Trim(line.substr(1, line.size() - 2)));
-                continue;
-            }
-            const auto eq = line.find('=');
-            if (eq == std::string::npos) {
-                continue;
-            }
-            const auto key = ToLower(Trim(line.substr(0, eq)));
-            values[section + "/" + key] = Trim(line.substr(eq + 1));
+        if (v == "passive" || v == "2") {
+            return Settings::CompatMode::Passive;
         }
-        return values;
-    }
-
-    void WriteDefaultINI()
-    {
-        std::ofstream f(INI_PATH);
-        if (!f.is_open()) {
-            spdlog::warn("NPCPathingNG: could not create default INI at {}", INI_PATH);
-            return;
-        }
-        f << "; NPC Pathing NG — settings.\n"
-             "; This file seeds the MCM on a new game or fresh install. Loading an\n"
-             "; existing save restores that save's MCM values over the top, so use the\n"
-             "; in-game MCM to change a playthrough already in progress.\n"
-             "\n"
-             "[General]\n"
-             "bEnabled=1\n"
-             "; Seconds between position samples per NPC\n"
-             "fCheckInterval=0.25\n"
-             "; Consecutive stuck samples before acting (interval * threshold = reaction time)\n"
-             "iStuckThreshold=4\n"
-             "; Moved less than this many units per sample while trying to move = stuck\n"
-             "fStuckDistance=4.0\n"
-             "; Seconds before the same NPC can be unstuck again\n"
-             "fCooldown=3.0\n"
-             "; NPCs scanned per frame (round-robin)\n"
-             "iActorsPerFrame=10\n"
-             "\n"
-             "[Parkour]\n"
-             "; Vault/climb via SkyParkour behavior patches (needs SkyParkour V3 + Nemesis/Pandora)\n"
-             "bEnableParkour=1\n"
-             "; Indoors: 0 = no parkour (default), 1 = steps and vaults only, 2 = everything\n"
-             "iIndoorMode=0\n"
-             "; Max climb height in game units. 130 (default) = steps, vaults and low/chest ledges\n"
-             "; only; NPCs won't scale walls, houses or mountainsides. Raise toward 250 (SkyParkour's\n"
-             "; own max) for full cliff/mountain climbing.\n"
-             "fMaxClimbHeight=130.0\n"
-             "; Max distance from the player at which NPCs may fire SkyParkour animations.\n"
-             "; SkyParkour climb/vault sounds are 2D (SOMStereo) — they play at your ears with\n"
-             "; no distance fade — so a far or off-screen NPC otherwise sounds like someone\n"
-             "; climbing next to you. 1600 ~ hearing range for a 3D footstep. 0 = no limit.\n"
-             "fParkourMaxPlayerDistance=1600.0\n"
-             "; NPCs use EVG Animated Traversal markers as ROUTES (2.5.0+). A stuck NPC\n"
-             "; approaching a marker from its entry side first tries a SkyParkour move along\n"
-             "; the marker's heading, then hops across to a collision-validated landing. The\n"
-             "; furniture itself is never activated for NPCs (the engine rejects it). Needs EVG\n"
-             "; Animated Traversal installed; harmless without it. Your own player-side EVG\n"
-             "; use is unaffected either way.\n"
-             "bEnableEVGTraversal=1\n"
-             "\n"
-             "[Followers]\n"
-             "; Followers reproduce the player's SkyParkour and EVG traversal moves (NFF compatible)\n"
-             "bFollowerReplay=1\n"
-             "\n"
-             "[Avoidance]\n"
-             "; Teleport-around-obstacle fallback, used only as a LAST resort when animated\n"
-             "; traversal can't help. Set 0 to disable teleporting entirely.\n"
-             "bEnableTeleportFallback=1\n"
-             "; How far sideways the bypass teleport goes\n"
-             "fSnapDistance=100.0\n"
-             "; How many times an NPC must trigger stuck (with no parkour/EVG escape) before a\n"
-             "; teleport is allowed. Higher = teleport is rarer and more of a true last resort.\n"
-             "iTeleportEscalation=5\n"
-             "\n"
-             "[Filters]\n"
-             "; 0 = NPCs in combat ARE processed (guards/foes climb after you)\n"
-             "bExcludeInCombat=0\n"
-             "; 0 = followers ARE processed\n"
-             "bExcludeFollowers=0\n"
-             "bExcludeMounted=1\n"
-             "\n"
-             "[Debug]\n"
-             "; Log every unstuck event to NPCPathingNG.log\n"
-             "bDebugLogging=0\n";
-        spdlog::info("NPCPathingNG: wrote default INI");
+        return a_default;
     }
 }
 
 void Settings::Load()
 {
-    auto values = ParseINI(INI_PATH);
+    const auto values = Ini::Parse(INI_PATH);
     if (values.empty()) {
-        WriteDefaultINI();
-        return;  // defaults already in members
+        logger::warn("NPCPathingNG: {} missing or empty — built-in defaults in use", INI_PATH);
+        return;
     }
 
-    auto getBool = [&](const char* a_key, bool a_def) {
-        auto it = values.find(a_key);
-        return it != values.end() ? (std::atoi(it->second.c_str()) != 0) : a_def;
-    };
+    auto getBool = [&](const char* a_key, bool a_def) { return Ini::Bool(values, a_key, a_def); };
     auto getInt = [&](const char* a_key, int a_def) {
         auto it = values.find(a_key);
         return it != values.end() ? std::atoi(it->second.c_str()) : a_def;
@@ -165,6 +47,20 @@ void Settings::Load()
     stuckDistance = std::max(0.5f, getFloat("general/fstuckdistance", stuckDistance));
     cooldown = std::max(0.5f, getFloat("general/fcooldown", cooldown));
     actorsPerFrame = std::clamp(getInt("general/iactorsperframe", actorsPerFrame), 1, 100);
+
+    frameBudgetMs = std::clamp(getFloat("performance/fframebudgetms", frameBudgetMs), 0.0f, 5.0f);
+    processRadius = std::clamp(getFloat("performance/fprocessradius", processRadius), 0.0f, 20000.0f);
+
+    if (const auto it = values.find("compat/smode"); it != values.end()) {
+        compatMode = ParseCompatMode(it->second, compatMode);
+    }
+
+    enableLeap = getBool("leap/benableleap", enableLeap);
+    leapMinHeight = std::clamp(getFloat("leap/fminheight", leapMinHeight), 20.0f, 120.0f);
+    leapMaxHeight = std::clamp(getFloat("leap/fmaxheight", leapMaxHeight), leapMinHeight, 220.0f);
+    leapMaxDrop = std::clamp(getFloat("leap/fmaxdrop", leapMaxDrop), 0.0f, 600.0f);
+    leapMaxDistance = std::clamp(getFloat("leap/fmaxdistance", leapMaxDistance), 80.0f, 400.0f);
+    leapMaxActive = std::clamp(getInt("leap/imaxactive", leapMaxActive), 1, 24);
 
     enableParkour = getBool("parkour/benableparkour", enableParkour);
     parkourIndoorMode = std::clamp(getInt("parkour/iindoormode", parkourIndoorMode), 0, 2);
@@ -185,8 +81,8 @@ void Settings::Load()
 
     debugLogging = getBool("debug/bdebuglogging", debugLogging);
 
-    spdlog::info("NPCPathingNG: INI loaded — enabled={}, parkour={}, indoorMode={}, followers={}, combat={}",
-                 enabled, enableParkour, parkourIndoorMode, !excludeFollowers, !excludeInCombat);
+    logger::info("NPCPathingNG: INI loaded — enabled={}, leap={}, parkour={}, evg={}, compatMode={}, budget={}ms",
+                 enabled, enableLeap, enableParkour, enableEvgTraversal, static_cast<int>(compatMode), frameBudgetMs);
 }
 
 void Settings::BindGlobals()
@@ -198,10 +94,7 @@ void Settings::BindGlobals()
 
     auto lookup = [&](RE::FormID a_localID) -> RE::TESGlobal* {
         auto* form = dataHandler->LookupForm(a_localID, PLUGIN_FILE);
-        // Type-checked, but via Is() rather than As<TESGlobal>(): this CommonLib
-        // build does not instantiate As<> for TESGlobal, so the templated cast
-        // fails to link (LNK2019). Is() is an inline formType compare.
-        return (form && form->Is(RE::FormType::Global)) ? static_cast<RE::TESGlobal*>(form) : nullptr;
+        return form ? form->As<RE::TESGlobal>() : nullptr;
     };
 
     gEnabled          = lookup(0x800);
@@ -223,15 +116,17 @@ void Settings::BindGlobals()
     gEvgTraversal     = lookup(0x811);
     gTeleportEscalation = lookup(0x812);
     gParkourMaxPlayerDistance = lookup(0x813);
+    gEnableLeap       = lookup(0x814);
+    gCompatMode       = lookup(0x815);
+    gFrameBudgetMs    = lookup(0x816);
 
     if (gEnabled) {
-        spdlog::info("NPCPathingNG: {} found — settings driven by MCM globals", PLUGIN_FILE);
-        // Deliberately NOT Refresh() here. At this point the globals still hold
-        // the ESP's compiled-in defaults, so copying them into members would
-        // discard everything Load() just read from the INI. PushToGlobals()
-        // seeds the other way instead; see settings.h.
+        logger::info("NPCPathingNG: {} found — settings driven by MCM globals", PLUGIN_FILE);
+        // Deliberately NOT Refresh() here: the globals still hold the ESP's compiled-in defaults,
+        // so copying them into members would discard what Load() just read from the INI.
+        // PushToGlobals() seeds the other way instead; see settings.h.
     } else {
-        spdlog::info("NPCPathingNG: {} not present — using INI settings", PLUGIN_FILE);
+        logger::info("NPCPathingNG: {} not present — using INI settings", PLUGIN_FILE);
     }
 }
 
@@ -272,7 +167,11 @@ void Settings::PushToGlobals()
     setBool(gDebugLogging, debugLogging);
     setBool(gEvgTraversal, enableEvgTraversal);
 
-    spdlog::info("NPCPathingNG: seeded MCM globals from INI — a loaded save overrides these");
+    setBool(gEnableLeap, enableLeap);
+    setNum(gCompatMode, static_cast<float>(static_cast<int>(compatMode)));
+    setNum(gFrameBudgetMs, frameBudgetMs);
+
+    logger::info("NPCPathingNG: seeded MCM globals from INI — a loaded save overrides these");
 }
 
 void Settings::Refresh()
@@ -309,4 +208,8 @@ void Settings::Refresh()
     debugLogging = asBool(gDebugLogging, debugLogging);
     enableEvgTraversal = asBool(gEvgTraversal, enableEvgTraversal);
     teleportEscalation = std::clamp(asInt(gTeleportEscalation, teleportEscalation), 1, 10);
+
+    enableLeap = asBool(gEnableLeap, enableLeap);
+    compatMode = static_cast<CompatMode>(std::clamp(asInt(gCompatMode, static_cast<int>(compatMode)), 0, 2));
+    frameBudgetMs = std::clamp(asFloat(gFrameBudgetMs, frameBudgetMs), 0.0f, 5.0f);
 }

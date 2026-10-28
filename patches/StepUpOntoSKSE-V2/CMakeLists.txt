@@ -1,62 +1,32 @@
-cmake_minimum_required(VERSION 3.21)
-project(StepUpOntoSKSE VERSION 1.5.1 LANGUAGES CXX)
-
-set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-# Build against the same CommonLibSSE-NG the NPCPathingNG plugin uses.
-# Override with -DCOMMONLIB_SSE_ROOT=<path to extern/CommonLibSSE> when it lives elsewhere.
-set(COMMONLIB_SSE_ROOT "" CACHE PATH "Path to a built CommonLibSSE-NG checkout (contains install/ and build/)")
-if (NOT COMMONLIB_SSE_ROOT)
-    foreach (candidate IN ITEMS
-        "${CMAKE_CURRENT_SOURCE_DIR}/../Modern NPC Pathing/extern/CommonLibSSE"
-        "${CMAKE_CURRENT_SOURCE_DIR}/../../NPC Pathing NG 2.4.1/extern/CommonLibSSE"
-        "${CMAKE_CURRENT_SOURCE_DIR}/../../NPC Pathing NG 2.4.0/extern/CommonLibSSE"
-        "${CMAKE_CURRENT_SOURCE_DIR}/../extern/CommonLibSSE"
-        "${CMAKE_CURRENT_SOURCE_DIR}/../../extern/CommonLibSSE"
-    )
-        if (EXISTS "${candidate}/install/lib/cmake/CommonLibSSE/CommonLibSSEConfig.cmake")
-            set(COMMONLIB_SSE_ROOT "${candidate}")
-            break()
-        endif()
-    endforeach()
+# StepUpOnto SKSE - NPC Pathing patch. Built from the repository root CMakeLists
+# (add_subdirectory), so it shares the root's CommonLibSSE-NG build instead of compiling it twice.
+if(NOT TARGET CommonLibSSE::CommonLibSSE)
+    message(FATAL_ERROR "Build this patch from the repository root: cmake --preset windows-msvc")
 endif()
-if (NOT EXISTS "${COMMONLIB_SSE_ROOT}/install/lib/cmake/CommonLibSSE/CommonLibSSEConfig.cmake")
-    message(FATAL_ERROR
-        "Built CommonLibSSE-NG not found. Build it first (see NPC Pathing NG/BUILDING.md), "
-        "then rerun, or pass -DCOMMONLIB_SSE_ROOT=<path to extern/CommonLibSSE>.")
-endif()
-message(STATUS "Using CommonLibSSE-NG at: ${COMMONLIB_SSE_ROOT}")
-list(APPEND CMAKE_PREFIX_PATH
-    "${COMMONLIB_SSE_ROOT}/install"
-    "${COMMONLIB_SSE_ROOT}/build/vcpkg_installed/x64-windows-static"
-)
-find_package(CommonLibSSE CONFIG REQUIRED)
 
-add_library(${PROJECT_NAME} SHARED
+add_library(StepUpOntoSKSE SHARED
+    src/PCH.h
     src/main.cpp
     src/Settings.cpp
     src/Menu.cpp
     src/Hooks.cpp
     src/Raycast.cpp
-    src/StepUpManager.cpp
-)
+    src/StepUpManager.cpp)
 
-target_precompile_headers(${PROJECT_NAME} PRIVATE src/PCH.h)
-target_link_libraries(${PROJECT_NAME} PRIVATE CommonLibSSE::CommonLibSSE)
+target_precompile_headers(StepUpOntoSKSE PRIVATE src/PCH.h)
+target_link_libraries(StepUpOntoSKSE PRIVATE CommonLibSSE::CommonLibSSE)
+target_include_directories(StepUpOntoSKSE PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_definitions(StepUpOntoSKSE PRIVATE _UNICODE UNICODE)
+target_compile_options(StepUpOntoSKSE PRIVATE
+    "$<$<COMPILE_LANGUAGE:CXX>:/permissive-;/Zc:preprocessor;/Zc:__cplusplus;/utf-8;/EHsc;/Gy;/Zi;/external:anglebrackets;/external:W0;/Brepro>")
+target_link_options(StepUpOntoSKSE PRIVATE /INCREMENTAL:NO /OPT:REF /OPT:ICF /DEBUG:FULL /Brepro /PDBALTPATH:StepUpOntoSKSE.pdb)
 
-set_property(TARGET ${PROJECT_NAME} PROPERTY
-    MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"
-)
-
-target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-
-target_compile_definitions(${PROJECT_NAME} PRIVATE _UNICODE UNICODE)
-
-set(OUTPUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/package/SKSE/Plugins")
-set_target_properties(${PROJECT_NAME} PROPERTIES
+# Staged beside the other build outputs, never into package/ (it ships only through the FOMOD).
+set(STEPUP_OUT "${CMAKE_BINARY_DIR}/patch_stepuponto/SKSE/Plugins")
+set_target_properties(StepUpOntoSKSE PROPERTIES
     OUTPUT_NAME "StepUpOntoSKSE"
     SUFFIX ".dll"
-    RUNTIME_OUTPUT_DIRECTORY "${OUTPUT_DIR}"
-    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${OUTPUT_DIR}"
-)
+    RUNTIME_OUTPUT_DIRECTORY "${STEPUP_OUT}"
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${STEPUP_OUT}"
+    RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${STEPUP_OUT}"
+    PDB_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/pdb")

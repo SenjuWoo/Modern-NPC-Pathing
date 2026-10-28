@@ -1,4 +1,6 @@
 #pragma once
+#include "RE/B/BSFixedString.h"
+
 #include <cstdint>
 
 /// Parkour types — must match SkyParkour V3's behavior graph state machine values
@@ -40,14 +42,16 @@ namespace ParkourHeights {
 }
 
 /// SkyParkour behavior graph variable / anim event names (BehaviorGraph.h in the SkyParkour source).
+/// Interned once: the graph calls take BSFixedString, and building one from a literal on every
+/// call goes through the global string pool each time.
 namespace SkyParkourGraph {
     // Anim events
-    constexpr const char* NotifyStart = "SkyParkour";            // send to begin a parkour action
-    constexpr const char* EvInterrupt = "SkyParkour_Interrupt";  // safe force-stop (never send SkyParkour_Stop from outside — recursion crash)
+    inline const RE::BSFixedString& NotifyStart() { static const RE::BSFixedString s{ "SkyParkour" }; return s; }            // begin a parkour action
+    inline const RE::BSFixedString& EvInterrupt() { static const RE::BSFixedString s{ "SkyParkour_Interrupt" }; return s; }  // safe force-stop (never send SkyParkour_Stop from outside — recursion crash)
 
     // Graph variables
-    constexpr const char* VarLedge        = "SkyParkourLedge";         // int, NpcParkourType
-    constexpr const char* VarOngoing      = "SkyParkourOngoing";       // bool, owned by the graph — never write it
-    constexpr const char* VarLowerBody    = "SkyParkourLowerBody";     // bool, lower-body-only steps when weapon out
-    constexpr const char* VarTPPInstalled = "SkyParkourTPPInstalled";  // bool, third-person behavior patch present
+    inline const RE::BSFixedString& VarLedge() { static const RE::BSFixedString s{ "SkyParkourLedge" }; return s; }               // int, NpcParkourType
+    inline const RE::BSFixedString& VarOngoing() { static const RE::BSFixedString s{ "SkyParkourOngoing" }; return s; }           // bool, owned by the graph — never write it
+    inline const RE::BSFixedString& VarLowerBody() { static const RE::BSFixedString s{ "SkyParkourLowerBody" }; return s; }       // bool, lower-body-only steps when weapon out
+    inline const RE::BSFixedString& VarTPPInstalled() { static const RE::BSFixedString s{ "SkyParkourTPPInstalled" }; return s; } // bool, third-person behavior patch present
 }

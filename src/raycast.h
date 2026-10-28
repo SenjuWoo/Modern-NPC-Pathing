@@ -21,4 +21,12 @@ namespace Raycast
     /// Uses the actor's collision filter with the layer overridden to kTransparent,
     /// mirroring SkyParkour's raycasts — this skips the caster's own body.
     Result Cast(RE::Actor* a_actor, const RE::NiPoint3& a_start, const RE::NiPoint3& a_dir, float a_maxDist);
+
+    /// A ray that lands on an actor's body (the player or another NPC) is a dynamic
+    /// obstacle, not a navmesh failure — never a reason to reposition.
+    bool IsActorHit(const Result& a_hit);
+
+    /// Headroom + body-radius clearance at a landing point, shared by the teleport bypass,
+    /// the EVG hop and the leap.
+    bool LandingIsClear(RE::Actor* a_actor, float a_groundZ, float a_x, float a_y);
 }

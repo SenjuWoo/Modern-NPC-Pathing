@@ -2,9 +2,9 @@
 <fomod>
   <Name>NPC Pathing NG</Name>
   <Author>GennyWoo</Author>
-  <Version MachineVersion="2.5.0">2.5.0</Version>
+  <Version MachineVersion="3.0.0">3.0.0</Version>
   <Website>https://github.com/SenjuWoo/Modern-NPC-Pathing</Website>
-  <Description>Runtime navmesh failsafe for NPCs, with optional SkyParkour traversal, EVG Animated Traversal marker routes and follower parkour replay. SKSE plugin, ESL-flagged plugin, no hard dependencies beyond SKSE and Address Library.</Description>
+  <Description>NPC traversal and navmesh failsafe for Skyrim SE/AE. Stuck NPCs hurdle, vault and drop on their own, or climb with SkyParkour and EVG Animated Traversal markers when those are installed. Detects Fluid Motion and NpcTraversalNG (Enemies Can Jump and Vault) and lets them go first. One installer, no choices: everything is detected.</Description>
   <Groups>
     <element>Gameplay</element>
     <element>Immersion</element>

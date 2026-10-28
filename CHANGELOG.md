@@ -1,3 +1,62 @@
+## 3.0.0 (2026-10-27)
+
+Rebuilt on the current CommonLibSSE-NG, rewritten for frame cost, with its own NPC hurdle/vault/drop
+and a compatibility layer for Fluid Motion and NpcTraversalNG. **One FOMOD with nothing to choose.**
+Not played in game yet: see "Verification" below.
+
+### Added
+
+- **Own hurdle / vault / drop** for stuck humanoids: collision-checked ballistic arc, vanilla jump
+  events, no animation files, no SkyParkour needed. Pure arc maths in `src/arc.h` with unit tests.
+  Humanoids only; off automatically when another mod owns NPC jumps.
+- **Compatibility layer** (`src/compat.*`), resolved once after every plugin has loaded:
+  - NpcTraversalNG / "Enemies Can Jump and Vault": `NPCT_ActiveFlights` is read each frame; an NPC it
+    is flying is never touched.
+  - Fluid Motion (`FluidMotion.dll`, `FluidMotionAnimation.dll`): ownership read from its INI
+    (`[FluidMotion] bEnabled`, `[Jump] bEnabled`, `[NpcClimb] bClimb`), re-read on every load.
+  - FluidMotionNPC: `FMNPC_IsTraversing` honoured, `FMNPC_Claim` sent while this mod moves an NPC.
+  - While another mod handles stuck NPCs this one waits twice as long, keeps its own leap off, and
+    needs two more stuck cycles before any teleport. Any NPC seen in the air is not "stuck" for 1.2 s.
+  - Mode in the MCM (new **Compatibility** page) and `[Compat] sMode`: Auto / Force / Passive.
+- **Frame-time budget** (`fFrameBudgetMs`, default 0.6, MCM slider) and a per-minute perf line in the log.
+- New ESP globals `0x814 NPNG_EnableLeap`, `0x815 NPNG_CompatMode`, `0x816 NPNG_FrameBudgetMs`.
+  Existing globals and FormIDs are unchanged.
+- INI: `[Performance]`, `[Compat]`, `[Leap]` sections.
+- The StepUpOnto SKSE compatibility build is rebuilt against the new CommonLib and ships inside the FOMOD.
+
+### Changed
+
+- **CommonLibSSE-NG v14.1.0** (alandtse fork; SE + AE + VR layouts in one library) replaces the
+  2024-era CharmedBaryon pin. One DLL for SE 1.5.97, AE 1.6.x and 1.7.x. Plugin declaration carries the
+  Address Library V5 flag and struct independence; the PE stamp is deterministic (`/Brepro`).
+- **Frame hook** is resolved per runtime (`REL::Relocate(0xAD, 0xAD, 0xAF)`; 2.x used 0xAD everywhere),
+  refuses a slot that does not point at executable code, chains behind other plugins that swapped the
+  same slot (NpcTraversalNG and Fluid Motion do), and a thrown exception turns the plugin off for the
+  session instead of reaching the game.
+- **Performance:** heavy unstick attempts are queued and run at most two a frame inside the time budget;
+  NPCs beyond 4500 units are skipped; MCM globals are copied 4x/s instead of every frame; follower replay
+  is throttled to one ledge sweep per 0.6 s; EVG markers are collected once per cell instead of walking
+  every reference of every nearby cell per stuck NPC; graph variable/event names are interned
+  `BSFixedString`s.
+- **Installer:** the three-option FOMOD page is gone. One automatic installer; SkyParkour, EVG, Fluid
+  Motion and NpcTraversalNG are detected by the DLL at game start, StepUpOnto by the installer. The
+  old profiles map to settings: *Navmesh failsafe only* = `bEnableParkour=0`, `bEnableEVGTraversal=0`;
+  *SkyParkour only* = `bEnableEVGTraversal=0`.
+- Default INI is no longer rewritten by the plugin when missing (the installer always ships it).
+
+### Fixed
+
+- ESP header `numRecords` counted records only (20, now 25 = 23 records + 2 groups). Inherited from 2.x; the game tolerated it, the header audit does not.
+- Hard-coded vtable index would have been wrong on VR; now resolved per runtime.
+- `PlayerCharacter::Update` hook did not check what it was overwriting.
+
+### Verification
+
+- Built with MSVC 19.51 (VS 2026 Build Tools), `/W4`, zero warnings; static runtime, no redistributable.
+- Unit tests (arc solver), Python release tests (ESP/SEQ/MCM/INI/version/FOMOD), packager self-check
+  (archive member allowlist, payload hashes, both FOMOD branches simulated).
+- Not done: any in-game run, per-runtime Address Library ID audit, a frame-time measurement.
+
 ## 2.5.0 (2026-08-16)
 
 EVG Animated Traversal markers are now **routes** for stuck NPCs, on by default.

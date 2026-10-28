@@ -1,7 +1,5 @@
 #pragma once
 
-#include "RE/T/TESGlobal.h"
-
 class Settings
 {
 public:
@@ -10,6 +8,14 @@ public:
         static Settings s;
         return &s;
     }
+
+    /// How this plugin behaves next to Fluid Motion / NpcTraversalNG (see compat.h).
+    enum class CompatMode : int
+    {
+        Auto = 0,     // detect them; their jumps/vaults win, this plugin is the fallback
+        Force = 1,    // ignore them: this plugin always runs its own traversal
+        Passive = 2   // never run own jumps; parkour/hop/teleport only as a late fallback
+    };
 
     /// Read the INI (base values / fallback for users without the ESP+MCM).
     void Load();
@@ -21,14 +27,13 @@ public:
     ///
     /// Called once at kDataLoaded, which runs BEFORE a save is deserialized.
     /// That ordering is the whole point: on a new game or a fresh install the
-    /// INI (and therefore the FOMOD preset the user picked) becomes the starting
-    /// MCM state, while loading an existing save still restores that save's own
-    /// global values straight over the top. Without this the INI was inert for
-    /// anyone running the ESP — Refresh() overwrote it every frame.
+    /// INI (and therefore the installer preset) becomes the starting MCM state,
+    /// while loading an existing save still restores that save's own global
+    /// values straight over the top.
     void PushToGlobals();
 
-    /// Copy bound global values into members — cheap, called every frame so
-    /// MCM changes apply instantly. No-op when the ESP isn't present.
+    /// Copy bound global values into members. Called a few times a second, not
+    /// per frame. No-op when the ESP isn't present.
     void Refresh();
 
     // [General]
@@ -39,6 +44,21 @@ public:
     float cooldown = 3.0f;         // seconds before the same actor can be unstuck again
     int   actorsPerFrame = 10;     // round-robin detection slice
 
+    // [Performance]
+    float frameBudgetMs = 0.6f;    // soft cap on this plugin's work per frame; heavy probes wait when spent
+    float processRadius = 4500.0f; // actors farther than this from the player are not watched (0 = all)
+
+    // [Compat]
+    CompatMode compatMode = CompatMode::Auto;
+
+    // [Leap] — own ballistic hurdle/vault/drop, used only when no other mod owns jumps
+    bool  enableLeap = true;
+    float leapMinHeight = 40.0f;   // lower obstacles are left to the navmesh
+    float leapMaxHeight = 140.0f;  // highest ledge/fence it will go over
+    float leapMaxDrop = 300.0f;    // deepest drop it will take (only toward a goal below)
+    float leapMaxDistance = 260.0f;// longest horizontal hop
+    int   leapMaxActive = 8;       // actors in the air at once
+
     // [Parkour]
     bool  enableParkour = true;
     int   parkourIndoorMode = 0;   // 0 = no parkour indoors (default), 1 = steps+vault, 2 = everything
@@ -47,20 +67,18 @@ public:
                                    // Raise toward 250 (SkyParkour's own max) for full mountain climbs.
     // SkyParkour climb/vault HKX files fire SoundPlay.SPPF_* descriptors that
     // use vanilla SOMStereo (2D, no attenuation). Without a range cap those
-    // SFX play at the listener whenever any high-process NPC parkours — the
-    // "ghost climb" reports after 2.4.9. 0 = unlimited (pre-2.4.10 behaviour).
+    // SFX play at the listener whenever any high-process NPC parkours.
+    // 0 = unlimited (pre-2.4.10 behaviour).
     float parkourMaxPlayerDistance = 1600.0f;
-    // NPCs use EVG Animated Traversal markers as ROUTES (2.5.0+): parkour
-    // along the marker heading, else a collision-validated hop across. The
-    // furniture is never activated for NPCs (engine-rejected). Harmless
-    // without EVG installed — the route layer reports unavailable and the
-    // only cost is a bounded marker scan in stuck NPCs' cells.
+    // NPCs use EVG Animated Traversal markers as ROUTES: parkour along the
+    // marker heading, else a collision-validated hop across. The furniture is
+    // never activated for NPCs (engine-rejected). Harmless without EVG.
     bool enableEvgTraversal = true;
 
     // [Avoidance]
     bool  enableTeleportFallback = true;
     float snapDistance = 100.0f;
-    int   teleportEscalation = 5;  // consecutive stuck triggers with no parkour/EVG escape before
+    int   teleportEscalation = 5;  // consecutive stuck triggers with no parkour/EVG/leap escape before
                                    // teleport is allowed. Higher = teleport is rarer / more last-resort.
 
     // [Followers]
@@ -97,4 +115,7 @@ private:
     RE::TESGlobal* gEvgTraversal = nullptr;
     RE::TESGlobal* gTeleportEscalation = nullptr;
     RE::TESGlobal* gParkourMaxPlayerDistance = nullptr;
+    RE::TESGlobal* gEnableLeap = nullptr;
+    RE::TESGlobal* gCompatMode = nullptr;
+    RE::TESGlobal* gFrameBudgetMs = nullptr;
 };

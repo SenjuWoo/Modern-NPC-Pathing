@@ -7,7 +7,7 @@ The ESP carries MCM-editable GLOB settings and the MCM Helper anchor quest
 so MCM changes apply instantly in-game.
 
 Records:
-  GLOB  0x800-0x80F, 0x811-0x813   settings (floats; bools as 0/1)
+  GLOB  0x800-0x80F, 0x811-0x816   settings (floats; bools as 0/1)
   QUST  0x810                       MCM anchor quest (VMAD: MCM_ConfigBase)
 
 Run:  python generate_esp.py [output.esp]
@@ -15,7 +15,7 @@ Run:  python generate_esp.py [output.esp]
 import struct, os, sys
 
 PLUGIN_INDEX = 0x01000000  # one master (Skyrim.esm) -> our records live at index 01
-NEXT_OBJECT_ID = 0x814       # HEDR stores the next local object ID, never a load-order-prefixed FormID
+NEXT_OBJECT_ID = 0x817       # HEDR stores the next local object ID, never a load-order-prefixed FormID
 
 # ── low-level plugin encoding ────────────────────────────────────────────────
 def zstr(s):
@@ -83,6 +83,9 @@ GLOBS = [
     (0x811, 'NPNG_EVGTraversal',     1.0),  # 0x810 is the MCM quest
     (0x812, 'NPNG_TeleportEscalation', 3.0),
     (0x813, 'NPNG_ParkourMaxPlayerDistance', 1600.0),
+    (0x814, 'NPNG_EnableLeap',       1.0),   # 3.0.0: own hurdle/vault/drop (off when another jump mod owns jumps)
+    (0x815, 'NPNG_CompatMode',       0.0),   # 3.0.0: 0 Auto, 1 Force, 2 Passive
+    (0x816, 'NPNG_FrameBudgetMs',    0.6),   # 3.0.0: soft per-frame time budget
 ]
 
 # ── plugin assembly ──────────────────────────────────────────────────────────
@@ -92,10 +95,12 @@ def generate(esp_path):
     r_glob = [make_glob(P | fid, e, v) for fid, e, v in GLOBS]
     r_qust = [make_qust(P | 0x810)]
 
-    num_records = len(r_glob) + len(r_qust)
+    # HEDR counts records AND groups (everything after TES4). Up to 2.5.0 this was records only (20);
+    # the game tolerates it, the ship-gate header audit does not.
+    num_records = len(r_glob) + len(r_qust) + 2  # + the GLOB and QUST top-level groups
     tes4_data = (sub('HEDR', struct.pack('<fII', 1.71, num_records, NEXT_OBJECT_ID))
                  + sub('CNAM', zstr('GennyWoo'))  # public author name, not the local account
-                 + sub('SNAM', zstr('NPC Pathing NG - navmesh failsafe + NPC SkyParkour'))
+                 + sub('SNAM', zstr('NPC Pathing NG - NPC traversal + navmesh failsafe'))
                  + sub('MAST', zstr('Skyrim.esm'))
                  + sub('DATA', struct.pack('<Q', 0)))
     tes4 = record('TES4', 0, 0x00000200, tes4_data)  # 0x200 = ESL flag
@@ -105,7 +110,7 @@ def generate(esp_path):
     os.makedirs(os.path.dirname(esp_path) or '.', exist_ok=True)
     with open(esp_path, 'wb') as f:
         f.write(esp)
-    print(f'Generated: {esp_path} ({len(esp):,} bytes, {num_records} records)')
+    print(f'Generated: {esp_path} ({len(esp):,} bytes, {num_records} records+groups)')
 
     seq_path = os.path.join(os.path.dirname(esp_path) or '.', 'Seq', 'NPCPathingNG.seq')
     os.makedirs(os.path.dirname(seq_path), exist_ok=True)
