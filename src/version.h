@@ -12,5 +12,5 @@ namespace PluginVersion
         (static_cast<std::uint32_t>(Major) << 24) |
         (static_cast<std::uint32_t>(Minor) << 16) |
         (static_cast<std::uint32_t>(Patch) << 4);
-    inline constexpr const char* String = "3.0.0";
+    inline constexpr const char* String = "3.0.1";
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Assemble and verify the single auto-detecting FOMOD archive.
+"""Assemble and verify the FOMOD archive (one page, one optional StepUpOnto patch tick-box).
 
 Only fomod_src/fomod/*.xml is authored. Everything the installer ships is copied from
 package/Data (plugin, SEQ, MCM config, INI, DLL) and from the StepUpOnto patch build output,
@@ -81,10 +81,9 @@ def stage() -> None:
 
     if not STEPUP_DLL.is_file():
         raise RuntimeError(f"StepUpOnto patch DLL not built: {STEPUP_DLL}")
-    for base in ("patch_stepuponto", "extras/StepUpOntoSKSE_patch"):
-        dst = STAGING / base / PATCH_FILE
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(STEPUP_DLL, dst)
+    dst = STAGING / "patch_stepuponto" / PATCH_FILE
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(STEPUP_DLL, dst)
 
     shutil.copy2(ROOT / "package" / "README.md", STAGING / "README.md")  # the short, user-facing readme
     shutil.copy2(ROOT / "LICENSE", STAGING / "LICENSE")
@@ -132,6 +131,16 @@ def validate_config() -> ET.Element:
             raise RuntimeError(f"ModuleConfig references missing source: {src}")
         if elem.tag == "folder" and "destination" in elem.attrib and elem.attrib["destination"].lower().startswith("data"):
             raise RuntimeError("FOMOD destinations are relative to Data; do not write a Data/ prefix")
+
+    # MO2 only evaluates file dependencies on .esp/.esm/.esl (anything else is always "Missing"), and
+    # 3.0.0 shipped with zero pages. Keep the plain layout every manager handles: one page, no conditions.
+    if root.find("conditionalFileInstalls") is not None:
+        raise RuntimeError("no conditionalFileInstalls: the optional patch is a plain tick-box")
+    for fd in root.iter("fileDependency"):
+        if Path(PureWindowsPath(fd.attrib["file"]).as_posix()).suffix.lower() not in {".esp", ".esm", ".esl"}:
+            raise RuntimeError(f"fileDependency on a non-plugin file never fires in MO2: {fd.attrib['file']}")
+    if len(root.findall("installSteps/installStep")) != 1:
+        raise RuntimeError("the installer must have exactly one page")
     return root
 
 
@@ -140,34 +149,20 @@ def _tree_files(folder: Path) -> set[str]:
 
 
 def simulate_branches(root: ET.Element) -> dict[str, set[str]]:
-    """Evaluate the conditional installs for every combination of the file dependencies."""
+    """Install result for every subset of the optional plugins (tick-boxes)."""
     base: set[str] = set()
     for folder in root.find("requiredInstallFiles"):
-        base |= {f for f in _tree_files(STAGING / folder.attrib["source"])}
+        base |= _tree_files(STAGING / folder.attrib["source"])
 
-    patterns = root.find("conditionalFileInstalls/patterns")
-    deps: list[str] = []
-    for pat in patterns:
-        for fd in pat.iter("fileDependency"):
-            deps.append(PureWindowsPath(fd.attrib["file"]).as_posix().lower())
-    deps = sorted(set(deps))
-
+    plugins = root.findall("installSteps/installStep/optionalFileGroups/group/plugins/plugin")
     results: dict[str, set[str]] = {}
-    for mask in range(1 << len(deps)):
-        present = {d for i, d in enumerate(deps) if mask >> i & 1}
+    for mask in range(1 << len(plugins)):
+        chosen = [p for i, p in enumerate(plugins) if mask >> i & 1]
         installed = set(base)
-        for pat in patterns:
-            ok = True
-            for fd in pat.iter("fileDependency"):
-                f = PureWindowsPath(fd.attrib["file"]).as_posix().lower()
-                state = fd.attrib["state"]
-                have = f in present
-                ok &= have if state in ("Active", "Inactive") else not have
-            if ok:
-                for folder in pat.iter("folder"):
-                    new = _tree_files(STAGING / folder.attrib["source"])
-                    installed |= new
-        results["+".join(sorted(present)) or "(nothing detected)"] = installed
+        for plugin in chosen:
+            for folder in plugin.iter("folder"):
+                installed |= _tree_files(STAGING / folder.attrib["source"])
+        results["+".join(p.attrib["name"] for p in chosen) or "(nothing ticked)"] = installed
     return results
 
 
@@ -180,7 +175,7 @@ def check_branches(branches: dict[str, set[str]]) -> None:
         if extra:
             raise RuntimeError(f"branch {name}: unexpected installed files: {sorted(extra)}")
         has_patch = PATCH_FILE in files
-        wants_patch = "stepuponto" in name
+        wants_patch = "stepuponto" in name.lower()
         if has_patch != wants_patch:
             raise RuntimeError(f"branch {name}: StepUpOnto patch installed={has_patch}, expected {wants_patch}")
     if len(branches) != 2:
@@ -205,7 +200,7 @@ def verify_archive(out: Path) -> None:
     """Re-open the archive: member allowlist, payload hashes, FOMOD sources, no Data/ or junk."""
     allowed = {"fomod/ModuleConfig.xml", "fomod/info.xml", *DOC_FILES}
     allowed |= {f"core/{f}" for f in CORE_FILES}
-    allowed |= {f"patch_stepuponto/{PATCH_FILE}", f"extras/StepUpOntoSKSE_patch/{PATCH_FILE}"}
+    allowed.add(f"patch_stepuponto/{PATCH_FILE}")
     with zipfile.ZipFile(out) as z:
         if z.testzip() is not None:
             raise RuntimeError("archive failed its CRC test")

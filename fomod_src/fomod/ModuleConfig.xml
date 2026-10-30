@@ -1,32 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://qconsulting.ca/fo3/ModConfig5.0.xsd">
-  <moduleName>NPC Pathing NG 3.0.0</moduleName>
+  <moduleName>NPC Pathing NG 3.0.1</moduleName>
 
-  <!-- One installer, no pages. Everything that depends on what else is installed is decided here
-       (file patterns) or at game start (the DLL detects SkyParkour, EVG Animated Traversal,
-       Fluid Motion, FluidMotionNPC and NpcTraversalNG by itself, see README "Compatibility").
-       The only hard requirements are SKSE and Address Library, neither of which is a plugin
-       file, so they cannot be probed here. -->
-
-  <!-- Always installed: plugin, SEQ, MCM config, settings INI and the SKSE DLL. -->
+  <!-- Always installed: plugin, SEQ, MCM config, settings INI and the SKSE DLL. Fluid Motion,
+       NpcTraversalNG, SkyParkour and EVG are detected by the DLL itself at game start, so nothing
+       about them is asked here. Same plain layout as 2.5.0: one page, file groups only. -->
   <requiredInstallFiles>
     <folder source="core" destination="" priority="0"/>
   </requiredInstallFiles>
 
-  <conditionalFileInstalls>
-    <patterns>
-      <!-- StepUpOnto SKSE present: ship the SkyParkour-aware build of its DLL (same settings,
-           same INI; it only stays hands-off while a SkyParkour move is running). Without
-           StepUpOnto nothing is installed. If your mod manager cannot see non-plugin files
-           and skips this, extras/StepUpOntoSKSE_patch holds the same DLL for a manual copy. -->
-      <pattern>
-        <dependencies operator="And">
-          <fileDependency file="SKSE\Plugins\StepUpOntoSKSE.dll" state="Active"/>
-        </dependencies>
-        <files>
-          <folder source="patch_stepuponto" destination="" priority="1"/>
-        </files>
-      </pattern>
-    </patterns>
-  </conditionalFileInstalls>
+  <installSteps order="Explicit">
+    <installStep name="Install">
+      <optionalFileGroups order="Explicit">
+        <group name="Optional patch" type="SelectAny">
+          <plugins order="Explicit">
+            <plugin name="StepUpOnto SKSE patch (only if you use StepUpOnto SKSE)">
+              <description>NPC Pathing NG is fully installed without this. Just press Install.
+
+Tick this ONLY if you use "StepUpOnto SKSE" together with SkyParkour. It adds a SkyParkour-aware build of StepUpOntoSKSE.dll (same settings, same INI) that stays hands-off while a SkyParkour move is running. It replaces StepUpOnto's own DLL, so leave it unticked if you do not have StepUpOnto: it would otherwise add StepUpOnto's step-up behaviour to your game.
+
+Changed your mind later? Reinstall without it, or just delete the patched StepUpOntoSKSE.dll from this mod.</description>
+              <files>
+                <folder source="patch_stepuponto" destination="" priority="1"/>
+              </files>
+              <typeDescriptor>
+                <type name="Optional"/>
+              </typeDescriptor>
+            </plugin>
+          </plugins>
+        </group>
+      </optionalFileGroups>
+    </installStep>
+  </installSteps>
 </config>

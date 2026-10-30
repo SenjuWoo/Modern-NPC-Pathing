@@ -1,3 +1,16 @@
+## 3.0.1 (2026-10-30)
+
+Installer hotfix; the plugin DLL code is unchanged from 3.0.0 apart from the version number.
+
+### Fixed
+
+- **FOMOD:** 3.0.0 had no install page and decided whether to install the StepUpOnto patch with a file
+  dependency on `StepUpOntoSKSE.dll`. Mod Organizer 2 only evaluates file dependencies on `.esp/.esm/.esl`
+  (unless its "use_any_file" setting is on), so the patch was never installed, and users reported MO2 closing
+  during install. The installer is now the plain 2.5.0 layout: required files plus one page with one optional
+  tick-box (off by default) for the StepUpOnto patch. No file or flag conditions, no `extras/` copy.
+- Packager and tests now reject any `fileDependency` on a non-plugin file and any installer without exactly one page.
+
 ## 3.0.0 (2026-10-27)
 
 Rebuilt on the current CommonLibSSE-NG, rewritten for frame cost, with its own NPC hurdle/vault/drop

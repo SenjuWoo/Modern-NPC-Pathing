@@ -13,7 +13,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "3.0.0"
+VERSION = "3.0.1"
 COMMONLIB_TAG = "v14.1.0"
 EXPECTED_LOCAL_IDS = {
     0x800, 0x801, 0x802, 0x803, 0x804, 0x805, 0x806, 0x807,
@@ -248,12 +248,16 @@ class ReleaseTests(unittest.TestCase):
         bound_ids = {int(value, 16) for value in re.findall(r"= lookup\((0x[0-9A-Fa-f]+)\);", settings)}
         self.assertEqual(bound_ids, generated_ids)
 
-    def test_fomod_is_one_automatic_installer(self) -> None:
+    def test_fomod_is_plain_one_page_installer(self) -> None:
+        # 3.0.0 had zero pages and a fileDependency on a DLL: MO2 reports non-plugin files as always
+        # Missing (unless use_any_file is on), so the patch never installed. Keep the 2.5.0 shape.
         root = ET.fromstring((ROOT / "fomod_src/fomod/ModuleConfig.xml").read_bytes())
-        self.assertIsNone(root.find("installSteps"), "the installer must not ask questions")
+        self.assertEqual(len(root.findall("installSteps/installStep")), 1)
+        self.assertIsNone(root.find("conditionalFileInstalls"))
         self.assertIsNotNone(root.find("requiredInstallFiles"))
-        deps = [fd.get("file") for fd in root.iter("fileDependency")]
-        self.assertEqual(deps, [r"SKSE\Plugins\StepUpOntoSKSE.dll"])
+        self.assertEqual([fd.get("file") for fd in root.iter("fileDependency")], [])
+        self.assertEqual(len(root.findall(".//plugin")), 1)
+        self.assertEqual(root.find(".//plugin/typeDescriptor/type").get("name"), "Optional")
         raw = (ROOT / "fomod_src/fomod/ModuleConfig.xml").read_bytes()
         self.assertTrue(raw.startswith(b'<?xml version="1.0" encoding="utf-8"?>'))
 

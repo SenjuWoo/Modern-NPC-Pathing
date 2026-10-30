@@ -15,7 +15,7 @@
 <p align="center">
   <a href="https://github.com/SenjuWoo/Modern-NPC-Pathing/actions/workflows/build.yml"><img src="https://github.com/SenjuWoo/Modern-NPC-Pathing/actions/workflows/build.yml/badge.svg" alt="Build"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-7ee0ff?labelColor=0d0f11" alt="GPL-3.0"></a>
-  <img src="https://img.shields.io/badge/release-v3.0.0-7ee0ff?labelColor=0d0f11" alt="v3.0.0">
+  <img src="https://img.shields.io/badge/release-v3.0.1-7ee0ff?labelColor=0d0f11" alt="v3.0.1">
   <img src="https://img.shields.io/badge/SKSE-SE%20%2F%20AE-8f9aa6?labelColor=0d0f11" alt="SKSE SE/AE">
 </p>
 
@@ -35,7 +35,7 @@
   <a href="https://www.nexusmods.com/skyrimspecialedition/mods/185413">Nexus</a>
 </p>
 
-# NPC Pathing NG v3.0.0
+# NPC Pathing NG v3.0.1
 
 ## Why it exists
 
@@ -54,7 +54,7 @@ It is not a pathfinding rewrite and not a combat-AI overhaul.
 - Validated last-resort teleport after repeated stuck cycles against static geometry
 - A **compatibility layer** for Fluid Motion and NpcTraversalNG (below)
 - MCM via MCM Helper, with `Data/SKSE/Plugins/NPCPathingNG.ini` as fallback
-- **One FOMOD, no pages**: it detects what is installed; there is nothing to choose
+- **One short FOMOD**: the mod detects what is installed when the game starts; the installer has a single page and one optional tick-box (StepUpOnto patch)
 
 ## Compatibility
 
@@ -66,7 +66,7 @@ The DLL looks for the other NPC-traversal mods once, after every plugin has load
 | **Fluid Motion** (`FluidMotion.dll`, plus `FluidMotionAnimation.dll`) | No typed API exists, so its own INI is read (`[FluidMotion] bEnabled`, `[Jump] bEnabled`, `[NpcClimb] bClimb`) and re-read on every load. Same rules as above while its jumps/climbs are on; a body that is in the air is never treated as stuck |
 | **FluidMotionNPC** (tonycubed2, `FMNPC_*` API) | `FMNPC_IsTraversing` is honoured, and `FMNPC_Claim` is called while this mod's SkyParkour or leap moves an NPC so the two never fight over a body |
 | **SkyParkour V3**, **EVG Animated Traversal** | Used as before (graph variables and form lookups) |
-| **StepUpOnto SKSE** | The FOMOD installs the SkyParkour-aware build of its DLL automatically |
+| **StepUpOnto SKSE** | Tick the optional patch in the installer to get the SkyParkour-aware build of its DLL (a mod manager cannot detect StepUpOnto, so this one is your choice) |
 | *None of the above* | This mod does the hurdle/vault/drop itself |
 
 Override in the MCM (**Compatibility** page) or the INI (`[Compat] sMode`):
@@ -130,10 +130,10 @@ walk intent + no progress   (other mod flying/jumping this NPC? -> leave it alon
 
 ## Install
 
-Install the single FOMOD from [Releases](https://github.com/SenjuWoo/Modern-NPC-Pathing/releases) or [Nexus](https://www.nexusmods.com/skyrimspecialedition/mods/185413) with Mod Organizer 2 or Vortex. It asks nothing.
+Install the single FOMOD from [Releases](https://github.com/SenjuWoo/Modern-NPC-Pathing/releases) or [Nexus](https://www.nexusmods.com/skyrimspecialedition/mods/185413) with Mod Organizer 2 or Vortex. One page, press Install.
 
 - Always installed: plugin, SEQ, MCM config, INI, DLL
-- Installed if `StepUpOntoSKSE.dll` is detected: the SkyParkour-aware StepUpOnto build. If your manager cannot see non-plugin files and skips it, copy `extras/StepUpOntoSKSE_patch` from the archive by hand
+- Optional tick-box, off by default: the SkyParkour-aware StepUpOnto SKSE build. Tick it only if you use StepUpOnto SKSE with SkyParkour; it replaces StepUpOnto's DLL
 
 Upgrading from 2.x: install over it. ESP globals and FormIDs from 2.4.6-2.5.0 are unchanged; three globals were added (`0x814-0x816`), which is safe on an existing save (they are not in the save yet and take their INI-seeded value). The old three-option FOMOD profiles map to settings: *Navmesh failsafe only* = `bEnableParkour=0` and `bEnableEVGTraversal=0`; *SkyParkour only* = `bEnableEVGTraversal=0`.
 
@@ -177,7 +177,7 @@ build_release.ps1    one-command build, test and package
 
 Verified in this tree:
 
-- Version **3.0.0** across `VERSION.txt`, `src/version.h`, CMake, vcpkg manifest, FOMOD, ESP
+- Version **3.0.1** across `VERSION.txt`, `src/version.h`, CMake, vcpkg manifest, FOMOD, ESP
 - Plugin and the StepUpOnto patch compile with `/W4` and no warnings against CommonLibSSE-NG v14.1.0 (SE + AE + VR layouts), static runtime
 - Arc solver unit tests, Python release/ESP/MCM/FOMOD tests, FOMOD archive verification (member allowlist, payload hashes, both install branches simulated)
 - The `NPCT_ActiveFlights` signature and the `FMNPC_*` API were read from the NpcTraversalNG and Fluid Motion sources; the installed `NpcTraversal.dll` exports `NPCT_ActiveFlights` (checked on its export table)
@@ -186,14 +186,13 @@ Verified in this tree:
 
 - Runtime behaviour on any game version: the leap, the compat arbitration and the frame cost are untested in game
 - FluidMotion.dll 1.2 exports `FluidMotion_GetAPI`, which has no public header, so it is not called; its ownership comes from its INI
-- Whether your mod manager's FOMOD engine evaluates a file dependency on a non-plugin file (the StepUpOnto branch); the manual fallback is in the archive
 - Address Library IDs were not independently checked per runtime; they come from CommonLibSSE-NG v14.1.0
 
 If a new build crashes on load, roll back to 2.5.0 and send `NPCPathingNG.log`.
 
 ## Related: StepUpOnto SKSE
 
-[StepUpOnto SKSE](https://www.nexusmods.com/skyrimspecialedition/mods/175689) by TheShinyHaxorus can fire its step-warp in the middle of a SkyParkour move. The FOMOD ships a build that checks `SkyParkourOngoing` first (patch sources: [`patches/StepUpOntoSKSE-V2`](patches/StepUpOntoSKSE-V2)). It is installed only when StepUpOnto is detected.
+[StepUpOnto SKSE](https://www.nexusmods.com/skyrimspecialedition/mods/175689) by TheShinyHaxorus can fire its step-warp in the middle of a SkyParkour move. The FOMOD ships a build that checks `SkyParkourOngoing` first (patch sources: [`patches/StepUpOntoSKSE-V2`](patches/StepUpOntoSKSE-V2)). It is an optional tick-box in the installer (managers cannot detect a DLL-only mod).
 
 ## Credits
 

@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg/master/scripts/vcpkg.schema.json",
   "name": "npcpathingng",
-  "version-semver": "3.0.0",
+  "version-semver": "3.0.1",
   "description": "NPC Pathing NG - NPC traversal and navmesh failsafe for Skyrim SE/AE",
   "license": "GPL-3.0-or-later",
   "builtin-baseline": "9126c6f1ff834e12372c5711ff3bdbca1921541c",

@@ -1,4 +1,4 @@
-# NPC Pathing NG v3.0.0
+# NPC Pathing NG v3.0.1
 
 SKSE plugin for Skyrim SE/AE (one DLL, built on CommonLibSSE-NG v14.1.0). Unsticks NPCs: hurdle, vault, drop, parkour and EVG marker routes, with a compatibility layer for Fluid Motion and NpcTraversalNG.
 
@@ -15,7 +15,7 @@ SKSE plugin for Skyrim SE/AE (one DLL, built on CommonLibSSE-NG v14.1.0). Unstic
 
 ## Install
 
-One FOMOD, no choices. It installs the plugin, SEQ, MCM config, INI and DLL, and the SkyParkour-aware StepUpOnto SKSE build only if StepUpOnto is detected (otherwise `extras/StepUpOntoSKSE_patch` holds it for a manual copy).
+One short FOMOD: press Install. It installs the plugin, SEQ, MCM config, INI and DLL. One optional tick-box (off by default) adds the SkyParkour-aware StepUpOnto SKSE build; tick it only if you use StepUpOnto SKSE with SkyParkour.
 
 Requires SKSE64 and Address Library. Optional: SkyParkour V3, SkyUI + MCM Helper, EVG Animated Traversal. No Visual C++ Redistributable needed.
 

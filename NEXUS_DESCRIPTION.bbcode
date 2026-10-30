@@ -1,10 +1,10 @@
 [size=5][b]NPC Pathing NG[/b][/size]
-[size=3]Version [b]3.0.0[/b] · Source: [url=https://github.com/SenjuWoo/Modern-NPC-Pathing]GitHub[/url][/size]
+[size=3]Version [b]3.0.1[/b] · Source: [url=https://github.com/SenjuWoo/Modern-NPC-Pathing]GitHub[/url][/size]
 
 [b]Unsticks NPCs.[/b] Stuck NPCs that are actually trying to walk hurdle fences, vault ledges and drop down on their own, or climb with SkyParkour and EVG Animated Traversal markers when those are installed, and only then use a short validated last-resort teleport. Built on the current CommonLibSSE-NG: one DLL for Skyrim SE 1.5.97, AE 1.6.x and 1.7.x. [b]Detects Fluid Motion and NpcTraversalNG (Enemies Can Jump and Vault) and lets them go first.[/b]
 
 [size=4][b]One installer, nothing to choose[/b][/size]
-The FOMOD has no pages. The plugin detects SkyParkour, EVG, Fluid Motion, FluidMotionNPC and NpcTraversalNG when the game starts; the installer adds the SkyParkour-aware StepUpOnto SKSE build only if StepUpOnto is installed.
+The FOMOD is one page: press Install. The plugin detects SkyParkour, EVG, Fluid Motion, FluidMotionNPC and NpcTraversalNG when the game starts. The only choice is an optional tick-box (off by default) for the SkyParkour-aware StepUpOnto SKSE build; tick it only if you use StepUpOnto SKSE with SkyParkour.
 
 [size=4][b]What this mod does[/b][/size]
 [list]
@@ -26,7 +26,7 @@ MCM > NPC Pathing NG > Compatibility: [b]Auto[/b] (default), [b]Always run own t
 [*]The own leap is humanoid-only; creatures and brutes are NpcTraversalNG's job
 [*]Default max climb is [b]130[/b] units; indoor parkour/leaps are off by default
 [*]SkyParkour climb sounds are 2D: NPCs farther than [b]1600[/b] units will not parkour
-[*]3.0.0 was compiled, unit-tested and package-verified but [b]not yet played[/b]; if it crashes on load, roll back to 2.5.0 and send NPCPathingNG.log
+[*]3.0.1 was compiled, unit-tested and package-verified but [b]not yet played[/b]; if it crashes on load, roll back to 2.5.0 and send NPCPathingNG.log
 [/list]
 
 [size=4][b]Requirements[/b][/size]
