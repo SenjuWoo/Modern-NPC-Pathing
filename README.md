@@ -15,7 +15,7 @@
 <p align="center">
   <a href="https://github.com/SenjuWoo/Modern-NPC-Pathing/actions/workflows/build.yml"><img src="https://github.com/SenjuWoo/Modern-NPC-Pathing/actions/workflows/build.yml/badge.svg" alt="Build"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-7ee0ff?labelColor=0d0f11" alt="GPL-3.0"></a>
-  <img src="https://img.shields.io/badge/release-v3.0.1-7ee0ff?labelColor=0d0f11" alt="v3.0.1">
+  <img src="https://img.shields.io/github/v/release/SenjuWoo/Modern-NPC-Pathing?label=release&color=7ee0ff" alt="latest release">
   <img src="https://img.shields.io/badge/SKSE-SE%20%2F%20AE-8f9aa6?labelColor=0d0f11" alt="SKSE SE/AE">
 </p>
 
