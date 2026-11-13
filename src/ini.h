@@ -7,6 +7,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 
 // Tiny INI reader shared by Settings and the compat layer: "section/key" (lowercased) -> value.
 namespace Ini
@@ -38,7 +39,13 @@ namespace Ini
         }
         std::string line;
         std::string section;
+        bool first = true;
         while (std::getline(file, line)) {
+            // Notepad's "UTF-8 with BOM" puts three bytes before the first "[Section]"; without
+            // this the header is not recognised and every key under it silently keeps its default.
+            if (std::exchange(first, false) && line.starts_with("\xEF\xBB\xBF")) {
+                line.erase(0, 3);
+            }
             line = Trim(line);
             if (line.empty() || line[0] == ';' || line[0] == '#') {
                 continue;

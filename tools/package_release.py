@@ -38,10 +38,10 @@ FIXED_TIMESTAMP = (2026, 7, 18, 0, 0, 0)
 
 
 def read_version() -> str:
-    text = (ROOT / "src/version.h").read_text(encoding="utf-8")
-    match = re.search(r'String\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)"', text)
+    text = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+    match = re.search(r"project\(NPCPathingNG VERSION ([0-9]+\.[0-9]+\.[0-9]+)", text)
     if not match:
-        raise RuntimeError("Could not read semantic version from src/version.h")
+        raise RuntimeError("Could not read semantic version from CMakeLists.txt")
     return match.group(1)
 
 

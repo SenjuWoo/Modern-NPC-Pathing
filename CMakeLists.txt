@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(NPCPathingNG VERSION 3.0.1 LANGUAGES CXX RC)
+project(NPCPathingNG VERSION 3.0.2 LANGUAGES CXX RC)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -108,8 +108,8 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/debug"
     PDB_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/pdb")
 
-# Companion build of StepUpOnto SKSE (SkyParkour-aware). Shipped by the FOMOD only when
-# StepUpOntoSKSE.dll is detected. Shares the CommonLibSSE target above.
+# Companion build of StepUpOnto SKSE (SkyParkour-aware). Shipped by the FOMOD as an optional
+# tick-box. Shares the CommonLibSSE target above.
 option(NPNG_BUILD_STEPUP_PATCH "Build the StepUpOnto SKSE compatibility patch" ON)
 if(NPNG_BUILD_STEPUP_PATCH)
     add_subdirectory(patches/StepUpOntoSKSE-V2)

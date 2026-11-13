@@ -5,23 +5,8 @@
 #include "settings.h"
 #include "version.h"
 
-#include <spdlog/sinks/basic_file_sink.h>
-
 namespace
 {
-    void InitializeLogging()
-    {
-        auto logPath = SKSE::log::log_directory();
-        if (!logPath) {
-            return;
-        }
-        auto logFile = *logPath / "NPCPathingNG.log";
-        auto logger = spdlog::basic_logger_mt("NPCPathingNG", logFile.string(), true);
-        logger->set_level(spdlog::level::info);
-        logger->flush_on(spdlog::level::info);
-        spdlog::set_default_logger(std::move(logger));
-    }
-
     // Re-read the INI whenever the journal/system menu closes, so non-MCM users can tweak
     // settings without restarting, and re-read Fluid Motion's INI (it re-reads on game load).
     // MCM users don't need this — their changes flow through the ESP globals.
@@ -108,8 +93,7 @@ SKSE_PLUGIN_LOAD(const SKSE::LoadInterface* a_skse)
     if (!a_skse || a_skse->IsEditor()) {
         return false;
     }
-    SKSE::Init(a_skse);
-    InitializeLogging();
+    SKSE::Init(a_skse);  // also opens NPCPathingNG.log (info level, flushed per line)
 
     logger::info("NPCPathingNG v{} loading (runtime {})", PluginVersion::String,
                  REL::Module::get().version().string());

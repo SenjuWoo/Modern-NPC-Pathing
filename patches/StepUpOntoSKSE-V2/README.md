@@ -46,13 +46,14 @@ SHA256 of the shipping zip:
 
 ## Building
 
-- Windows x64, Visual Studio 2022 C++ tools, CMake 3.21+
-- Built CommonLibSSE-NG (same pin as NPC Pathing NG when possible)
+Built from the repository root so it shares NPC Pathing NG's CommonLibSSE-NG (see `BUILDING.md`):
 
 ```powershell
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCOMMONLIB_SSE_ROOT=<path to CommonLibSSE>
-cmake --build build --config Release
+cmake --preset windows-msvc
+cmake --build build --config RelWithDebInfo --target StepUpOntoSKSE
 ```
+
+The current build ships inside the NPC Pathing NG installer as an optional tick-box.
 
 ## Credits / permissions
 

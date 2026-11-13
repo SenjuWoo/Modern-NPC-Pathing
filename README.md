@@ -35,7 +35,7 @@
   <a href="https://www.nexusmods.com/skyrimspecialedition/mods/185413">Nexus</a>
 </p>
 
-# NPC Pathing NG v3.0.1
+# NPC Pathing NG v3.0.2
 
 ## Why it exists
 
@@ -177,8 +177,8 @@ build_release.ps1    one-command build, test and package
 
 Verified in this tree:
 
-- Version **3.0.1** across `VERSION.txt`, `src/version.h`, CMake, vcpkg manifest, FOMOD, ESP
-- Plugin and the StepUpOnto patch compile with `/W4` and no warnings against CommonLibSSE-NG v14.1.0 (SE + AE + VR layouts), static runtime
+- Version **3.0.2** across `VERSION.txt`, CMake (the DLL takes it from there), vcpkg manifest, FOMOD, ESP
+- The plugin compiles with `/W4` and no warnings (the StepUpOnto patch keeps its upstream warning level) against CommonLibSSE-NG v14.1.0 (SE + AE + VR layouts), static runtime
 - Arc solver unit tests, Python release/ESP/MCM/FOMOD tests, FOMOD archive verification (member allowlist, payload hashes, both install branches simulated)
 - The `NPCT_ActiveFlights` signature and the `FMNPC_*` API were read from the NpcTraversalNG and Fluid Motion sources; the installed `NpcTraversal.dll` exports `NPCT_ActiveFlights` (checked on its export table)
 

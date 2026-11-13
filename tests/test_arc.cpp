@@ -1,5 +1,6 @@
-// Game-independent tests for src/arc.h. Built as NPNGTests; no CommonLib, no game.
+// Game-independent tests for src/arc.h and src/ini.h. Built as NPNGTests; no CommonLib, no game.
 #include "arc.h"
+#include "ini.h"
 
 #include <cmath>
 #include <cstdio>
@@ -112,6 +113,21 @@ int main()
         Params p;
         p.gravity = 0.0f;
         CHECK(!Solve({ 0, 0, 0 }, { 10, 0, 0 }, 0.0f, p).has_value());
+    }
+
+    // INI saved as "UTF-8 with BOM": the first section must still be read.
+    {
+        const char* path = "npng_test_bom.ini";
+        {
+            std::ofstream out(path, std::ios::binary);
+            out << "\xEF\xBB\xBF[General]\r\nbEnabled=0 ; note\r\n[Leap]\r\nfMaxDrop=120\r\n";
+        }
+        const auto values = Ini::Parse(path);
+        std::remove(path);
+        CHECK(values.contains("general/benabled"));
+        CHECK(!Ini::Bool(values, "general/benabled", true));
+        CHECK(values.contains("leap/fmaxdrop") && values.at("leap/fmaxdrop") == "120");
+        CHECK(Ini::Bool(values, "missing/key", true));
     }
 
     if (g_failures == 0) {

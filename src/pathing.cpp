@@ -397,10 +397,13 @@ bool PathingManager::TryFollowerReplay(RE::Actor* a_actor, ActorEntry& a_entry)
             continue;
         }
 
+        if (isEvg && !EvgTraversal::IsRouteEnabled()) {
+            continue;  // scanning latched off in this cell; don't stall on it
+        }
+        // Both kinds below cost a ledge sweep: throttle before the attempt, not after one kind.
+        a_entry.nextReplayTry = now + 0.6;
+
         if (isEvg) {
-            if (!EvgTraversal::IsRouteEnabled()) {
-                continue;  // scanning latched off in this cell; don't stall on it
-            }
             auto markerPtr = ev.furnRef.get();
             if (!markerPtr) {
                 continue;
@@ -428,8 +431,6 @@ bool PathingManager::TryFollowerReplay(RE::Actor* a_actor, ActorEntry& a_entry)
             }
             continue;
         }
-
-        a_entry.nextReplayTry = now + 0.6;
 
         // Attempt the same move the player made. TryParkour only touches the
         // follower's facing if a valid ledge is actually found — failed probes

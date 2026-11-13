@@ -1,3 +1,26 @@
+## 3.0.2 (2026-11-13)
+
+Audit release. No new features; saves, FormIDs, settings and the installer are unchanged.
+
+### Fixed
+
+- **The 3.0.1 DLL told SKSE it was 3.0.0.** The version existed in three places and one was missed.
+  The DLL now takes its SKSE version, log string and file version from the single CMake project version.
+- **Teleport threshold default disagreed:** the ESP global said 3, the DLL and the INI say 5. The ESP now
+  says 5 too (the INI already seeded 5 at start-up, so behaviour does not change). A test compares every
+  default across ESP, DLL and INI.
+- **An INI saved as "UTF-8 with BOM" lost its first section:** `[General]` was not recognised and its keys
+  silently kept their defaults. The same reader is used for `FluidMotion.ini`.
+- **Follower replay across EVG markers was not throttled** (only the SkyParkour replay was). Both kinds now
+  share the 0.6 s throttle.
+- The log file was opened twice at start-up (once by CommonLibSSE-NG, once by the plugin). One logger now.
+- StepUpOnto patch: the `SkyParkourOngoing` name is interned once instead of rebuilt per actor per frame.
+
+### Build
+
+- CI verifies that the CommonLibSSE-NG tag still points at the audited commit before building.
+- Docs: StepUpOnto patch build steps, README warning-level claim and the INI header corrected.
+
 ## 3.0.1 (2026-10-30)
 
 Installer hotfix; the plugin DLL code is unchanged from 3.0.0 apart from the version number.

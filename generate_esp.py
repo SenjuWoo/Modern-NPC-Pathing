@@ -81,7 +81,7 @@ GLOBS = [
     (0x80E, 'NPNG_FollowerReplay',   1.0),
     (0x80F, 'NPNG_DebugLogging',     0.0),
     (0x811, 'NPNG_EVGTraversal',     1.0),  # 0x810 is the MCM quest
-    (0x812, 'NPNG_TeleportEscalation', 3.0),
+    (0x812, 'NPNG_TeleportEscalation', 5.0),  # same default as settings.h and the INI
     (0x813, 'NPNG_ParkourMaxPlayerDistance', 1600.0),
     (0x814, 'NPNG_EnableLeap',       1.0),   # 3.0.0: own hurdle/vault/drop (off when another jump mod owns jumps)
     (0x815, 'NPNG_CompatMode',       0.0),   # 3.0.0: 0 Auto, 1 Force, 2 Passive

@@ -1,4 +1,4 @@
-# NPC Pathing NG 3.0.1 — Nexus release notes
+# NPC Pathing NG 3.0.2 — Nexus release notes
 
 ## Short summary
 

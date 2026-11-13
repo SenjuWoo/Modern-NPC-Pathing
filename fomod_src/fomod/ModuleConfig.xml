@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://qconsulting.ca/fo3/ModConfig5.0.xsd">
-  <moduleName>NPC Pathing NG 3.0.1</moduleName>
+  <moduleName>NPC Pathing NG 3.0.2</moduleName>
 
   <!-- Always installed: plugin, SEQ, MCM config, settings INI and the SKSE DLL. Fluid Motion,
        NpcTraversalNG, SkyParkour and EVG are detected by the DLL itself at game start, so nothing

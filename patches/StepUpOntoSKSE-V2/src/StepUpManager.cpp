@@ -17,7 +17,8 @@ namespace StepUp
 		bool IsParkourAnimationDriving(RE::Actor* a_actor)
 		{
 			bool skyParkourOngoing = false;
-			a_actor->GetGraphVariableBool("SkyParkourOngoing", skyParkourOngoing);
+			static const RE::BSFixedString kOngoing{ "SkyParkourOngoing" };  // interned once: this runs per actor per frame
+			a_actor->GetGraphVariableBool(kOngoing, skyParkourOngoing);
 			return skyParkourOngoing;
 		}
 	}

@@ -13,7 +13,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "3.0.1"
+VERSION = "3.0.2"
 COMMONLIB_TAG = "v14.1.0"
 EXPECTED_LOCAL_IDS = {
     0x800, 0x801, 0x802, 0x803, 0x804, 0x805, 0x806, 0x807,
@@ -50,8 +50,12 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn(f"VERSION {VERSION}", read_text(ROOT / "CMakeLists.txt"))
         self.assertEqual(json.loads(read_text(ROOT / "vcpkg.json"))["version-semver"], VERSION)
         version_header = read_text(ROOT / "src/version.h")
-        self.assertIn(f'String = "{VERSION}"', version_header)
-        self.assertIn("(static_cast<std::uint32_t>(Major) << 24)", version_header)
+        # The DLL has no version literal of its own: SKSE version, log string and file version
+        # all come from CMake (3.0.1 reported 3.0.0 to SKSE because one of three copies was missed).
+        self.assertNotRegex(version_header, r"=\s*\"?\d")
+        for part in ("MAJOR", "MINOR", "PATCH"):
+            self.assertIn(f"NPNG_VERSION_{part}", version_header)
+            self.assertIn(f"NPNG_VERSION_{part}=${{PROJECT_VERSION_{part}}}", read_text(ROOT / "CMakeLists.txt"))
         self.assertIn(f"# NPC Pathing NG v{VERSION}", read_text(ROOT / "README.md"))
         self.assertTrue(read_text(ROOT / "package/README.md").startswith(f"# NPC Pathing NG v{VERSION}"))
         self.assertEqual(read_text(ROOT / "VERSION.txt").strip(), f"NPC Pathing NG {VERSION}")
@@ -248,6 +252,38 @@ class ReleaseTests(unittest.TestCase):
         bound_ids = {int(value, 16) for value in re.findall(r"= lookup\((0x[0-9A-Fa-f]+)\);", settings)}
         self.assertEqual(bound_ids, generated_ids)
 
+    def test_setting_defaults_agree_everywhere(self) -> None:
+        """ESP global, settings.h member and shipped INI must carry the same default."""
+        generator = ast.parse(read_text(ROOT / "generate_esp.py"))
+        globs = next(ast.literal_eval(n.value) for n in generator.body
+                     if isinstance(n, ast.Assign) and getattr(n.targets[0], "id", "") == "GLOBS")
+        esp = {fid: value for fid, _, value in globs}
+        cpp = read_text(ROOT / "src/settings.cpp")
+        header = read_text(ROOT / "src/settings.h")
+        bind = {m.group(1): int(m.group(2), 16) for m in re.finditer(r"(g\w+)\s*=\s*lookup\((0x[0-9A-Fa-f]+)\)", cpp)}
+        member_of = {m.group(2): m.group(1) for m in re.finditer(r"(\w+) = [^;]*?as(?:Bool|Int|Float)\((g\w+),", cpp)}
+        ini_key = {m.group(1): m.group(2)
+                   for m in re.finditer(r'(\w+) = [^;]*?get(?:Bool|Int|Float)\(\s*"([a-z]+/[a-z]+)"', cpp)}
+        ini_key["compatMode"] = "compat/smode"
+        hdr = {}
+        for m in re.finditer(r"^\s*(?:bool|int|float|CompatMode)\s+(\w+)\s*=\s*([^;]+);", header, re.M):
+            text = m.group(2).strip().rstrip("f")
+            hdr[m.group(1)] = float({"true": 1, "false": 0, "CompatMode::Auto": 0}.get(text, text))
+        ini, section = {}, ""
+        for line in read_text(ROOT / "package/Data/SKSE/Plugins/NPCPathingNG.ini").splitlines():
+            line = line.strip()
+            if line.startswith("["):
+                section = line[1:-1].lower()
+            elif "=" in line and not line.startswith(";"):
+                key, value = line.split("=", 1)
+                ini[f"{section}/{key.strip().lower()}"] = value.strip().lower()
+        self.assertEqual(len(bind), len(esp))
+        for glob, fid in bind.items():
+            member = member_of[glob]
+            shipped = ini[ini_key[member]]
+            shipped = float({"auto": 0, "force": 1, "passive": 2}.get(shipped, shipped))
+            self.assertEqual((esp[fid], hdr[member], shipped), (esp[fid],) * 3, f"default of {member} differs")
+
     def test_fomod_is_plain_one_page_installer(self) -> None:
         # 3.0.0 had zero pages and a fileDependency on a DLL: MO2 reports non-plugin files as always
         # Missing (unless use_any_file is on), so the patch never installed. Keep the 2.5.0 shape.
@@ -271,6 +307,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertRegex(workflow, r"actions/setup-python@v\d+")
         self.assertIn("VCPKG_INSTALLATION_ROOT", workflow)
         self.assertIn(f"COMMONLIB_TAG: {COMMONLIB_TAG}", workflow)
+        self.assertRegex(workflow, r"COMMONLIB_SHA: [0-9a-f]{40}")  # the tag is verified against a commit
         self.assertIn(f"git -C extern/CommonLibSSE checkout {COMMONLIB_TAG}", read_text(ROOT / "BUILDING.md"))
         self.assertIn(f'$CommonLibTag = "{COMMONLIB_TAG}"', read_text(ROOT / "build_release.ps1"))
         self.assertIn("alandtse/CommonLibSSE-NG", workflow)

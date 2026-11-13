@@ -1,4 +1,4 @@
-# NPC Pathing NG v3.0.1
+# NPC Pathing NG v3.0.2
 
 SKSE plugin for Skyrim SE/AE (one DLL, built on CommonLibSSE-NG v14.1.0). Unsticks NPCs: hurdle, vault, drop, parkour and EVG marker routes, with a compatibility layer for Fluid Motion and NpcTraversalNG.
 

@@ -16,6 +16,8 @@ jobs:
     env:
       # Keep in step with BUILDING.md and build_release.ps1 (tests/test_release.py checks it).
       COMMONLIB_TAG: v14.1.0
+      # A tag can be moved; the build stops if it no longer points at the audited commit.
+      COMMONLIB_SHA: 896f6d02e465576b6d044b36fd441835aa9c8bf6
       # Same baseline as vcpkg.json "builtin-baseline".
       VCPKG_BASELINE: 9126c6f1ff834e12372c5711ff3bdbca1921541c
 
@@ -70,6 +72,8 @@ jobs:
         run: |
           git clone --filter=blob:none https://github.com/alandtse/CommonLibSSE-NG.git extern/CommonLibSSE
           git -C extern/CommonLibSSE checkout $env:COMMONLIB_TAG
+          $head = git -C extern/CommonLibSSE rev-parse HEAD
+          if ($head -ne $env:COMMONLIB_SHA) { throw "CommonLibSSE-NG $env:COMMONLIB_TAG is $head, expected $env:COMMONLIB_SHA" }
           git -C extern/CommonLibSSE submodule update --init --depth 1
 
       - name: Build NPC Pathing NG and the StepUpOnto patch
@@ -83,7 +87,7 @@ jobs:
         run: |
           $dll = "package/Data/SKSE/Plugins/NPCPathingNG.dll"
           if (-not (Test-Path $dll)) { throw "build produced no DLL at $dll" }
-          $version = (Select-String -Path src/version.h -Pattern 'String\s*=\s*"([0-9.]+)"').Matches[0].Groups[1].Value
+          $version = (Select-String -Path CMakeLists.txt -Pattern 'project\(NPCPathingNG VERSION ([0-9.]+)').Matches[0].Groups[1].Value
           $bytes = [System.IO.File]::ReadAllBytes((Resolve-Path $dll))
           $text = [System.Text.Encoding]::ASCII.GetString($bytes)
           if (-not $text.Contains($version)) { throw "DLL does not embed version $version" }
@@ -96,7 +100,7 @@ jobs:
           python -m unittest discover -s tests -v
           python tools/package_fomod.py
 
-      # Version is read from src/version.h so this never needs editing per release.
+      # Version is read from CMakeLists.txt so this never needs editing per release.
       - name: Upload Nexus-ready release
         uses: actions/upload-artifact@v7
         with:
