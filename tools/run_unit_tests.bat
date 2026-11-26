@@ -17,6 +17,9 @@ for /f "usebackq delims=" %%I in (`"%VSW%" -latest -products * -requires Microso
 :found
 if not defined VSDEV goto :nomsvc
 if not exist "%VSDEV%" goto :nomsvc
+rem vcvars64 calls vswhere by name; without its folder on PATH it prints a spurious
+rem "'vswhere.exe' is not recognized" error even though the toolchain loads fine.
+set "PATH=%PATH%;%ProgramFiles(x86)%\Microsoft Visual Studio\Installer"
 call "%VSDEV%" >nul
 set "OUT=%~dp0..\build_tests"
 if not exist "%OUT%" mkdir "%OUT%"
