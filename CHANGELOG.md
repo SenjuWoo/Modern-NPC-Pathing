@@ -1,3 +1,12 @@
+## Unreleased
+
+Repository docs only; the DLL, ESP, INI and installer are unchanged (no new release).
+
+- README rebuilt around a cover image and real output: the game-independent test run and a check of the
+  v3.0.2 release zip. A settings table lists the INI keys players change most, with their shipped defaults.
+- `tools/run_unit_tests.bat` no longer prints a spurious "'vswhere.exe' is not recognized" error while
+  loading MSVC.
+
 ## 3.0.2 (2026-11-13)
 
 Audit release. No new features; saves, FormIDs, settings and the installer are unchanged.
